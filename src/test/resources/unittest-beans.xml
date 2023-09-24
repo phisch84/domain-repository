@@ -1,0 +1,15 @@
+<beans 
+    xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    
+    xsi:schemaLocation="
+    http://www.springframework.org/schema/beans
+    http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+    
+    <bean id="DomainObjectRepository" class="com.schoste.ddd.domain.v1.services.standard.DomainObjectRepositoryImpl" scope="singleton" />
+	<bean id="DomainObject" class="com.schoste.ddd.domain.v1.models.ExampleDomainObject" scope="prototype" />
+	<bean id="UnitOfWork" class="com.schoste.ddd.domain.v1.services.standard.UnitOfWorkImpl" scope="prototype" />
+	<bean id="AutoObjectConverter" class="com.schoste.ddd.domain.v1.services.standard.SpringAutoObjectConverterImpl" scope="prototype" />
+    <bean id="ExampleDO" class="com.schoste.ddd.infrastructure.dal.v2.models.ExampleDO" scope="prototype" />
+    <bean id="ExampleDAO" class="com.schoste.ddd.infrastructure.dal.v2.services.mocked.ExampleDAOImpl" scope="singleton" />
+</beans>
