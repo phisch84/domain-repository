@@ -3,7 +3,9 @@ package com.schoste.ddd.domain.v1.services;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -546,5 +548,46 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 		
 		Assert.assertNotNull(hopefullyLoadedDomainObject);
 		Assert.assertEquals(objectId, hopefullyLoadedDomainObject.getId());
+	}
+
+	/**
+	 * Asserts that the {@link GenericRepository#getAll(java.util.function.Predicate)} method of a Repository implementation
+	 * actually returns a stream with all expected objects since no predicate (null) was provided
+	 * 
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void testGetAllStreamedWithoutPredicate() throws Exception
+	{
+		try (Stream<T> doStream = this.getRepository().getAll(null))
+		{
+			// New IDs can be anything greater than 0
+			doStream.forEach(domainObject 
+				-> Assert.assertTrue(domainObject.getId() > 0));
+		}
+	}
+
+	/**
+	 * Asserts that the {@link GenericRepository#getAll(java.util.function.Predicate)} method of a Repository implementation
+	 * actually returns a stream with all expected objects that are supposed to pass the filter predicate
+	 * 
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void testGetAllStreamedWithPredicate() throws Exception
+	{
+		int expectedMinId = 5;
+
+		try (Stream<T> doStream = this.getRepository().getAll(domainObject -> domainObject.getId() > expectedMinId))
+		{
+			Iterator<T> it = doStream.iterator();
+
+			while (it.hasNext())
+			{
+				T domainObject = it.next();
+
+				Assert.assertTrue(domainObject.getId() > expectedMinId);
+			}
+		}
 	}
 }

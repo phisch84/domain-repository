@@ -9,6 +9,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -20,6 +23,7 @@ import com.schoste.ddd.domain.v1.models.DomainObject;
 import com.schoste.ddd.domain.v1.models.DomainObject.State;
 import com.schoste.ddd.domain.v1.services.AutoObjectConverter;
 import com.schoste.ddd.domain.v1.services.GenericRepository;
+import com.schoste.ddd.domain.v1.services.LazyRepositoryLoader;
 import com.schoste.ddd.domain.v1.services.RepositoryChangeListener;
 import com.schoste.ddd.infrastructure.dal.v2.exceptions.DALException;
 import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
@@ -319,7 +323,19 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 		
 		return domainObject;
 	}
-	
+
+	/**
+	 * Returns an iterable object that will poll the next available data object from the data source
+	 * 
+	 * To be overwritten by the extending class.
+	 * 
+	 * @param <DO> the class of the data object to load
+	 * @param <T> the class of the domain object to load
+	 * @return an iterable object that will poll the next available data object from the data source
+	 * @throws Exception re-throws every exception
+	 */
+	protected abstract LazyRepositoryLoader<DO, T> createLazyLoader() throws Exception;
+
 	/**
 	 * {@inheritDoc}
 	 */
@@ -470,7 +486,32 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 			throw new DomainException(e);
 		}
 	}
-	
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public Stream<T> getAll(Predicate<? super T> filterPredicate) throws DALException, DomainException
+	{
+		try
+		{
+			LazyRepositoryLoader<DO, T> lrl = this.createLazyLoader();
+			Stream<T> lazyLoadingStream = (filterPredicate == null) ? StreamSupport.stream(lrl, false)
+																	: StreamSupport.stream(lrl, false).filter(filterPredicate);
+
+					  lazyLoadingStream.onClose(lrl);
+
+			return lazyLoadingStream;
+		}
+		catch (DALException e)
+		{
+			throw e;
+		}
+		catch (Exception e)
+		{
+			throw new DomainException(e);
+		}
+	}
+
 	/**
 	 * {@inheritDoc}
 	 */

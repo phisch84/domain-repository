@@ -1,11 +1,14 @@
 package com.schoste.ddd.domain.v1.services;
 
 import java.util.Collection;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import com.schoste.ddd.domain.v1.exceptions.DomainException;
 import com.schoste.ddd.domain.v1.models.DomainObject;
 import com.schoste.ddd.infrastructure.dal.v2.exceptions.DALException;
 import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
+import com.schoste.ddd.infrastructure.dal.v2.services.GenericDataAccessObject;
 
 /**
  * Generic interface to repositories
@@ -59,7 +62,17 @@ public interface GenericRepository<T extends DomainObject, DO extends GenericDat
 	 * @throws DomainException re-throws every exception as {@see DomainException}
 	 */
 	public Collection<T> getAll() throws DALException, DomainException;
-	
+
+	/**
+	 * Lazily loads data object from the underlying data source ({@link GenericDataAccessObject#getAll(Predicate)}) and matches them against a given filter (if provided).
+	 * 
+	 * @param filterPredicate if not null, then this filter predicate will be applied on each loaded domain object before it is considered to be added to the result stream
+	 * @return a stream of data objects which passed a given filter (if provided)
+	 * @throws DALException re-throws every exception as DAL exception
+	 * @throws DomainException re-throws every exception as {@see DomainException}
+	 */
+	public Stream<T> getAll(Predicate<? super T> filterPredicate) throws DALException, DomainException;
+
 	/**
 	 * Adds a domain model to the repository. The model is only added
 	 * if there is no other model with the same id.
