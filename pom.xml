@@ -8,13 +8,14 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <java.source.version>21</java.source.version>
-        <java.target.version>21</java.target.version>
+        <!-- compiles against the Java 8 API, even if built with a newer JDK (same baseline as dao) -->
+        <java.release.version>8</java.release.version>
         <maven.version>3.15.0</maven.version>
         <maven.jar-plugin.version>3.5.0</maven.jar-plugin.version>
         <maven.surfeire.version>3.5.5</maven.surfeire.version>
         <junit.version>4.13.2</junit.version>
-        <spring.version>7.0.7</spring.version>
+        <!-- latest Spring version compatible with Java 8 (same as dao) -->
+        <spring.version>5.3.39</spring.version>
         <ddd.dao.version>4.0.0-SNAPSHOT</ddd.dao.version>
         <ddd.dao-fs.version>4.0.0-SNAPSHOT</ddd.dao-fs.version>
         <ddd.test-utils.version>0.3.RELEASE</ddd.test-utils.version>
@@ -92,8 +93,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>${maven.version}</version>
                     <configuration>
-                        <source>${java.source.version}</source>
-                        <target>${java.target.version}</target>
+                        <release>${java.release.version}</release>
                     </configuration>
                 </plugin>
 

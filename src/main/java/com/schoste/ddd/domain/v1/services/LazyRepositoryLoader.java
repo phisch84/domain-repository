@@ -11,7 +11,7 @@ import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
  * @param <SR> the data type of data objects loaded from the underlying DAO
  * @param <E> the actual data type of the domain objects that are lazily loaded
  */
-public interface LazyRepositoryLoader<DO extends GenericDataObject, E extends DomainObject> extends Spliterator<E>, Runnable, AutoCloseable
+public interface LazyRepositoryLoader<DO extends GenericDataObject<?>, E extends DomainObject<?>> extends Spliterator<E>, Runnable, AutoCloseable
 {
 
 }

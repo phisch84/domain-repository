@@ -16,7 +16,7 @@ import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
  * @param <DO> the data type of the data objects that will be converted to domain objects
  * @param <E> the data type of the domain objects to return
  */
-public class LazyRepositoryLoaderImpl<DO extends GenericDataObject, E extends DomainObject> implements LazyRepositoryLoader<DO, E>
+public class LazyRepositoryLoaderImpl<DO extends GenericDataObject<?>, E extends DomainObject<?>> implements LazyRepositoryLoader<DO, E>
 {
     protected Function<DO, E> dataObjToDomainObjFunction;
     protected Stream<DO> dataObjStream;

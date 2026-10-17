@@ -1,5 +1,6 @@
 package com.schoste.ddd.domain.v1.services.standard;
 
+import java.io.Serializable;
 import java.lang.ref.SoftReference;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -7,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -34,11 +36,12 @@ import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
  * 
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
+ * @param <ID> the data type of the identifiers of the domain models and data objects
  * @param <T> the domain model class
  * @param <DO> the data object class
  */
 @Repository
-public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends GenericDataObject> implements GenericRepository<T, DO> 
+public abstract class GenericRepositoryImpl<ID extends Serializable, T extends DomainObject<ID>, DO extends GenericDataObject<ID>> implements GenericRepository<ID, T, DO>
 {
 	@Autowired
 	protected ApplicationContext applicationContext;
@@ -47,9 +50,8 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	protected AutoObjectConverter converter;
 	
 	protected Set<RepositoryChangeListener> changeListener = new HashSet<RepositoryChangeListener>();
-	protected Map<Integer, SoftReference<T>> loadedObjects = new HashMap<Integer, SoftReference<T>>();
-	protected int lastVirtualId = -1;
-	
+	protected Map<ID, SoftReference<T>> loadedObjects = new HashMap<ID, SoftReference<T>>();
+
 	private void notifyObjectAdded(T domainObject)
 	{
 		try
@@ -95,21 +97,6 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 		}
 	}
 	
-	private void notifyReload()
-	{
-		try
-		{
-			synchronized (this.changeListener)
-			{
-				for (RepositoryChangeListener listener : this.changeListener) listener.onReload(this);
-			}
-		}
-		catch (Exception e)
-		{
-			System.err.println(e.getMessage());
-		}
-	}
-
 	/**
 	 * Obtains the actual class of domain objects
 	 * 
@@ -122,9 +109,9 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	{
 		Type[] types = ((ParameterizedType) this.getClass().getGenericSuperclass()).getActualTypeArguments();
 
-		if (types.length < 1) throw new IllegalStateException();
+		if (types.length < 2) throw new IllegalStateException();
 
-		return (Class) types[0];
+		return (Class) types[1];
 	}
 	
 	/**
@@ -139,18 +126,48 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	{
 		Type[] types = ((ParameterizedType) this.getClass().getGenericSuperclass()).getActualTypeArguments();
 
-		if (types.length < 2) throw new IllegalStateException();
+		if (types.length < 3) throw new IllegalStateException();
 
-		return (Class) types[1];
+		return (Class) types[2];
 	}
-	
+
 	/**
 	 * Gets the data access object (DAO) which is used to actually persist
 	 * the domain models
-	 * 
+	 *
 	 * @return a data access object (DAO)
 	 */
-	protected abstract GenericDataAccessObject<?> getDataAccessObject();
+	protected abstract GenericDataAccessObject<ID, DO> getDataAccessObject();
+
+	/**
+	 * Checks if a domain object was already persisted, i.e. it has an id which is not virtual
+	 * (see {@link GenericDataAccessObject#isVirtualId(Serializable)}).
+	 *
+	 * @param domainObject the domain object to check
+	 * @return true if the domain object was persisted already, false otherwise
+	 */
+	protected boolean isPersisted(T domainObject)
+	{
+		ID id = domainObject.getId();
+
+		return (id != null) && !this.getDataAccessObject().isVirtualId(id);
+	}
+
+	/**
+	 * Checks if an object is a domain object of this repository which was already persisted
+	 * by calling the typed method isPersisted().
+	 *
+	 * @param domainObject the object to check
+	 * @return true if the object is a domain object of this repository and was persisted already, false otherwise
+	 * @throws Exception re-throws every exception
+	 */
+	@SuppressWarnings("unchecked")
+	protected boolean isPersisted(Object domainObject) throws Exception
+	{
+		if ((domainObject == null) || (!this.getDomainObjectClass().isInstance(domainObject))) return false;
+
+		return this.isPersisted((T) domainObject);
+	}
 
 	/**
 	 * Called by {@see GenericRepositoryImpl#dataObjectToDomainObject(GenericDataObject, DomainObject)}
@@ -239,8 +256,7 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	{
 		if (domainObject == null) throw new IllegalArgumentException("domainObject");
 
-		@SuppressWarnings("unchecked")
-		DO dataObject = (domainObject.getId() > 0) ? (DO) this.getDataAccessObject().get(domainObject.getId()) : (DO) this.getDataAccessObject().createDataObject();
+		DO dataObject = this.isPersisted(domainObject) ? this.getDataAccessObject().get(domainObject.getId()) : this.getDataAccessObject().createDataObject();
 
 		if (dataObject == null) throw new DataObjectNullException(this.getDataAccessObject().getClass());
 
@@ -269,21 +285,6 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	}
 	
 	/**
-	 * Resets the virtual id for not persisted domain objects to the next lowest value.
-	 * If multiple UoWs track a repository and one of them commits it might still be
-	 * the case that some domain objects are neither persisted nor removed and therefore
-	 * still exist with virtual Ids.
-	 */
-	protected synchronized void resetVirtualDomainObjectId()
-	{
-		int minVirtualId = 0;
-		
-		for (int domainObjectId : this.loadedObjects.keySet()) minVirtualId = Math.min(minVirtualId, domainObjectId);
-		
-		this.lastVirtualId = --minVirtualId;
-	}
-	
-	/**
 	 * Tries to get a domain object from the cache. If it isn't found in cache
 	 * (either because it expired or was not loaded yet) it is reloaded from DAL
 	 * 
@@ -291,8 +292,7 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	 * @return the domain object with the given id or null if it does not exist at all
 	 * @throws Exception re-throws every exception
 	 */
-	@SuppressWarnings("unchecked")
-	protected synchronized T loadDomainObject(int id) throws Exception
+	protected synchronized T loadDomainObject(ID id) throws Exception
 	{
 		T domainObject = null;
 		
@@ -307,7 +307,7 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 		if (domainObject == null)
 		{
 			// The object was not loaded yet or was removed from cache; reload it
-			DO dataObject = (DO) this.getDataAccessObject().get(id);
+			DO dataObject = this.getDataAccessObject().get(id);
 			
 			if (dataObject != null)
 			{
@@ -367,8 +367,9 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 		{
 			@SuppressWarnings("unchecked")
 			T obj = (T) this.applicationContext.getBean(this.getDomainObjectClass());
-			
-			obj.setId(this.lastVirtualId--);
+
+			// the DAO assigns a new virtual id to every data object it creates
+			obj.setId(this.getDataAccessObject().createDataObject().getId());
 			obj.setState(State.Detached);
 			
 			return obj;
@@ -382,55 +383,7 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	/**
 	 * {@inheritDoc}
 	 */
-	@SuppressWarnings("unchecked")
-	public synchronized void reload() throws DALException, DomainException
-	{
-		try
-		{
-			this.notifyReload();
-			
-			for (SoftReference<T> loadedObjectRef : this.loadedObjects.values())
-			{
-				T existingObject = loadedObjectRef.get();
-				
-				if (existingObject != null) existingObject.setState(State.Detached);
-			}
-	
-			Collection<?> newDataObjects = (Collection<?>) this.getDataAccessObject().reloadAll();
-	
-			for (Object newObject : newDataObjects) 
-			{
-				DO newDataObject = (DO) newObject;
-				T newDomainObject = this.dataObjectToDomainObject(newDataObject, this.get(newDataObject.getId()));
-	
-				this.loadedObjects.put(newDomainObject.getId(), new SoftReference<T>(newDomainObject));
-			}
-			
-			Collection<Integer> existingObjectIds = new ArrayList<>(this.loadedObjects.keySet());
-			
-			for (int existingObjectId : existingObjectIds)
-			{
-				SoftReference<T> existingObjectRef = this.loadedObjects.get(existingObjectId);
-				T existingObject = existingObjectRef.get();
-				
-				if (existingObject == null) this.loadedObjects.remove(existingObjectId);
-				if (existingObject.getState() == State.Detached) this.loadedObjects.remove(existingObject.getId());
-			}
-		}
-		catch (DALException e)
-		{
-			throw e;
-		}
-		catch (Exception e)
-		{
-			throw new DomainException(e);
-		}
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	public T get(int id) throws DALException, DomainException
+	public T get(ID id) throws DALException, DomainException
 	{
 		try
 		{
@@ -451,24 +404,26 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 	/**
 	 * {@inheritDoc}
 	 */
-	@SuppressWarnings("unchecked")
 	public synchronized Collection<T> getAll() throws DALException, DomainException
 	{
 		try
 		{
-			Collection<?> newDataObjects = (Collection<?>) this.getDataAccessObject().getAll();
-			
-			for (Object newObject : newDataObjects) 
+			try (Stream<DO> newDataObjects = this.getDataAccessObject().getAll())
 			{
-				DO newDataObject = (DO) newObject;
-				T newDomainObject = this.dataObjectToDomainObject(newDataObject, this.get(newDataObject.getId()));
-				
-				this.loadedObjects.put(newDomainObject.getId(), new SoftReference<T>(newDomainObject));
+				Iterator<DO> newDataObjectIterator = newDataObjects.iterator();
+
+				while (newDataObjectIterator.hasNext())
+				{
+					DO newDataObject = newDataObjectIterator.next();
+					T newDomainObject = this.dataObjectToDomainObject(newDataObject, this.get(newDataObject.getId()));
+
+					this.loadedObjects.put(newDomainObject.getId(), new SoftReference<T>(newDomainObject));
+				}
 			}
-			
+
 			Collection<T> domainObjects = new ArrayList<T>(this.loadedObjects.size());
-	
-			for (int domainObjectId : this.loadedObjects.keySet())
+
+			for (ID domainObjectId : this.loadedObjects.keySet())
 			{
 				T domainObject = this.loadDomainObject(domainObjectId);
 				
@@ -664,7 +619,6 @@ public abstract class GenericRepositoryImpl<T extends DomainObject, DO extends G
 			{
 				this.changeListener.clear();
 				this.loadedObjects.clear();
-				this.resetVirtualDomainObjectId();
 			}
 		}
 		catch (Exception e)

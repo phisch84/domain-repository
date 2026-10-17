@@ -1,5 +1,6 @@
 package com.schoste.ddd.domain.v1.services;
 
+import java.io.Serializable;
 import java.util.Collection;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -15,10 +16,11 @@ import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
  * 
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
+ * @param <ID> the data type of the identifiers of the domain models and data objects
  * @param <T> the domain model class
  * @param <DO> the data object class
  */
-public interface GenericRepository<T extends DomainObject, DO extends GenericDataObject>
+public interface GenericRepository<ID extends Serializable, T extends DomainObject<ID>, DO extends GenericDataObject<ID>>
 {
 	/**
 	 * Creates a new domain model but does not add it to the repository.
@@ -28,18 +30,7 @@ public interface GenericRepository<T extends DomainObject, DO extends GenericDat
 	 * @throws DomainException re-throws every exception as {@see DomainException}
 	 */
 	public T createObject() throws DomainException;
-	
-	/**
-	 * Reloads all domain objects from the underlying data source.
-	 * Existing objects with state Added or Deleted will become detached.
-	 * Existing objects with state Modified will become Unchanged.
-	 * Existing objects with state Detached will become Unchanged if they exist in the underlying data source.
-	 * 
-	 * @throws DALException re-throws exceptions from the data access layer
-	 * @throws DomainException re-throws every exception as {@see DomainException}
-	 */
-	public void reload() throws DALException, DomainException;
-	
+
 	/**
 	 * Gets a domain object with a given id.
 	 * If no domain object with the given id exists in the repository it will
@@ -51,7 +42,7 @@ public interface GenericRepository<T extends DomainObject, DO extends GenericDat
 	 * @throws DALException re-throws exceptions from the data access layer
 	 * @throws DomainException re-throws every exception as {@see DomainException}
 	 */
-	public T get(int id) throws DALException, DomainException;
+	public T get(ID id) throws DALException, DomainException;
 	
 	/**
 	 * Gets all available domain models
@@ -64,7 +55,7 @@ public interface GenericRepository<T extends DomainObject, DO extends GenericDat
 	public Collection<T> getAll() throws DALException, DomainException;
 
 	/**
-	 * Lazily loads data object from the underlying data source ({@link GenericDataAccessObject#getAll(Predicate)}) and matches them against a given filter (if provided).
+	 * Lazily loads data object from the underlying data source ({@link GenericDataAccessObject#getAll()}) and matches them against a given filter (if provided).
 	 * 
 	 * @param filterPredicate if not null, then this filter predicate will be applied on each loaded domain object before it is considered to be added to the result stream
 	 * @return a stream of data objects which passed a given filter (if provided)
@@ -150,8 +141,8 @@ public interface GenericRepository<T extends DomainObject, DO extends GenericDat
 	public void removeChangeListener(RepositoryChangeListener listener);
 
 	/**
-	 * Resets the repository by removing all listeners,
-	 * clearing all loaded objects and reseting the virtual object id.
+	 * Resets the repository by removing all listeners
+	 * and clearing all loaded objects.
 	 * 
 	 * @throws Exception re-throws every exception
 	 */

@@ -1,11 +1,15 @@
 package com.schoste.ddd.domain.v1.models;
 
+import java.io.Serializable;
+
 /**
  * Generic interface to all Domain Objects
- * 
+ *
  * @author Philipp Schosteritsch
+ *
+ * @param <ID> the data type of the domain object's identifier. It is the same as the identifier of the corresponding data object
  */
-public interface DomainObject 
+public interface DomainObject<ID extends Serializable>
 {
 	/**
 	 * States of the domain object with regards to DAL operations
@@ -57,28 +61,24 @@ public interface DomainObject
 	/**
 	 * Gets the unique id of the domain object.
 	 * Domain objects of a certain repository must have a unique identifier.
-	 * If the identifier is greater than zero, the domain objects was already persisted.
-	 * If the identifier is lass than zero, the domain object was not yet persisted but
-	 * added to a repository.
-	 * If the identifier is zero the domain object was not persisted yet and not added to
-	 * a repository yet.
-	 * 
+	 * Domain objects created by a repository get a virtual id from the repository's data access object
+	 * until they are persisted (see {@link com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject#isVirtualId(Serializable)}).
+	 * If the identifier is null, the domain object was not created by a repository.
+	 *
 	 * @return the unique id of the domain object.
 	 */
-	public int getId();
-	
+	public ID getId();
+
 	/**
 	 * Sets the unique id of the domain object.
 	 * Domain objects of a certain repository must have a unique identifier.
-	 * If the identifier is greater than zero, the domain objects was already persisted.
-	 * If the identifier is lass than zero, the domain object was not yet persisted but
-	 * added to a repository.
-	 * If the identifier is zero the domain object was not persisted yet and not added to
-	 * a repository yet.
-	 * 
+	 * Domain objects created by a repository get a virtual id from the repository's data access object
+	 * until they are persisted (see {@link com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject#isVirtualId(Serializable)}).
+	 * If the identifier is null, the domain object was not created by a repository.
+	 *
 	 * @param id the unique id of the domain object.
 	 */
-	public void setId(int id);
+	public void setId(ID id);
 	
 	/**
 	 * Gets the domain object's state which is evaluated by Units of Work

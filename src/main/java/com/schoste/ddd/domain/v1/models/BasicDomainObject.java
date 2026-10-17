@@ -1,36 +1,40 @@
 package com.schoste.ddd.domain.v1.models;
 
+import java.io.Serializable;
+import java.util.Objects;
+
 /**
  * Basic domain object implementation
- * 
+ *
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
+ * @param <ID> the data type of the domain object's identifier
  */
-public abstract class BasicDomainObject implements DomainObject
+public abstract class BasicDomainObject<ID extends Serializable> implements DomainObject<ID>
 {
-	protected int id;
+	protected ID id;
 	protected State state;
 
 	/**
-	 * Creates a new instance with a detached state and an Id = 0
+	 * Creates a new instance with a detached state and no id (null)
 	 */
 	public BasicDomainObject()
 	{
 		this.state = State.Detached;
-		this.id = 0;
+		this.id = null;
 	}
-	
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public int getId() { return this.id; }
 
 	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void setId(int id) { this.id = id; }
+	public ID getId() { return this.id; }
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void setId(ID id) { this.id = id; }
 
 	/**
 	 * {@inheritDoc}
@@ -50,7 +54,7 @@ public abstract class BasicDomainObject implements DomainObject
 	@Override
 	public int hashCode()
 	{
-		return this.id;
+		return Objects.hashCode(this.id);
 	}
 	
 	/**
@@ -63,8 +67,8 @@ public abstract class BasicDomainObject implements DomainObject
 		if (obj == null) return false;
 		if (getClass() != obj.getClass()) return false;
 
-		BasicDomainObject other = (BasicDomainObject) obj;
-		
-		return (this.id == other.id);
+		BasicDomainObject<?> other = (BasicDomainObject<?>) obj;
+
+		return Objects.equals(this.id, other.id);
 	}
 }

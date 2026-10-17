@@ -1,6 +1,7 @@
 package com.schoste.ddd.domain.v1.services.standard;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -28,7 +29,7 @@ import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
  */
 public class UnitOfWorkImpl implements UnitOfWork
 {
-	private Map<GenericRepositoryImpl<?,?>, RepositoryChangeLog> changeLogs;
+	private Map<GenericRepositoryImpl<?,?,?>, RepositoryChangeLog> changeLogs;
 	private Set<UnitOfWorkListener> listners = new HashSet<UnitOfWorkListener>();
 
 	private void notifyListenersAfterDelete(Collection<Object> objs)
@@ -46,23 +47,22 @@ public class UnitOfWorkImpl implements UnitOfWork
 		}
 	}
 
-	private void deleteDomainObjects(GenericRepositoryImpl<?,?> repository) throws Exception
+	private <ID extends Serializable, DO extends GenericDataObject<ID>> void deleteDomainObjects(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
 	{
-		GenericDataAccessObject<?> dao = repository.getDataAccessObject();
+		GenericDataAccessObject<ID, DO> dao = repository.getDataAccessObject();
 		RepositoryChangeLog changeLog = this.changeLogs.get(repository);
 		Collection<Object> objectsToRemove = changeLog.getObjectsToRemove();
 
 		synchronized (objectsToRemove)
 		{
-			GenericDataObject[] dataObjects = new GenericDataObject[objectsToRemove.size()];
+			Collection<DO> dataObjects = new ArrayList<>(objectsToRemove.size());
 			Map<Integer, Object> dataObjectsToObjectsToRemove = new HashMap<>(objectsToRemove.size());
-			int index=0;
 
 			for (Object objToRemove : objectsToRemove)
 			{
-				GenericDataObject dataObject = repository.domainObjectToDataObject(objToRemove);
-				
-				dataObjects[index++] = dataObject;
+				DO dataObject = repository.domainObjectToDataObject(objToRemove);
+
+				dataObjects.add(dataObject);
 				dataObjectsToObjectsToRemove.put(System.identityHashCode(dataObject), objToRemove);
 			}
 
@@ -70,7 +70,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 
 			for (Object objToRemove : objectsToRemove)
 			{
-				if (objToRemove instanceof DomainObject) ((DomainObject) objToRemove).setState(State.Detached);
+				if (objToRemove instanceof DomainObject) ((DomainObject<?>) objToRemove).setState(State.Detached);
 			}
 
 			this.notifyListenersAfterDelete(objectsToRemove);
@@ -94,30 +94,29 @@ public class UnitOfWorkImpl implements UnitOfWork
 		}
 	}
 
-	private void persistNewDomainObjects(GenericRepositoryImpl<?,?> repository) throws Exception
+	private <ID extends Serializable, DO extends GenericDataObject<ID>> void persistNewDomainObjects(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
 	{
-		GenericDataAccessObject<?> dao = repository.getDataAccessObject();
+		GenericDataAccessObject<ID, DO> dao = repository.getDataAccessObject();
 		RepositoryChangeLog changeLog = this.changeLogs.get(repository);
 		Collection<Object> objectsToPersist = changeLog.getObjectsToAdd();
 
 		synchronized (objectsToPersist)
 		{
-			GenericDataObject[] dataObjects = new GenericDataObject[objectsToPersist.size()];
+			Collection<DO> dataObjects = new ArrayList<>(objectsToPersist.size());
 			Map<Integer, Object> dataObjectsToObjectsToPersist = new HashMap<>(objectsToPersist.size());
-			int index=0;
 
 			for (Object objToPersist : objectsToPersist)
 			{
-				GenericDataObject dataObject = repository.domainObjectToDataObject(objToPersist);
-				
-				dataObjects[index++] = dataObject;
+				DO dataObject = repository.domainObjectToDataObject(objToPersist);
+
+				dataObjects.add(dataObject);
 				dataObjectsToObjectsToPersist.put(System.identityHashCode(dataObject), objToPersist);
 			}
 
 			dao.save(dataObjects);
 
 			// update the domain object in case the data object changed
-			for (GenericDataObject dataObject : dataObjects) repository.dataObjectToDomainObject(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
+			for (DO dataObject : dataObjects) repository.dataObjectToDomainObject(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
 
 			this.notifyListenersAfterPersistNew(objectsToPersist);
 
@@ -140,30 +139,29 @@ public class UnitOfWorkImpl implements UnitOfWork
 		}
 	}
 
-	private void persistExistingDomainObjects(GenericRepositoryImpl<?,?> repository) throws Exception
+	private <ID extends Serializable, DO extends GenericDataObject<ID>> void persistExistingDomainObjects(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
 	{
-		GenericDataAccessObject<?> dao = repository.getDataAccessObject();
+		GenericDataAccessObject<ID, DO> dao = repository.getDataAccessObject();
 		RepositoryChangeLog changeLog = this.changeLogs.get(repository);
 		Collection<Object> objectsToPersist = changeLog.getObjectsToUpdate();
 
 		synchronized (objectsToPersist)
 		{
-			GenericDataObject[] dataObjects = new GenericDataObject[objectsToPersist.size()];
+			Collection<DO> dataObjects = new ArrayList<>(objectsToPersist.size());
 			Map<Integer, Object> dataObjectsToObjectsToPersist = new HashMap<>(objectsToPersist.size());
-			int index=0;
 
 			for (Object objToPersist : objectsToPersist)
 			{
-				GenericDataObject dataObject = repository.domainObjectToDataObject(objToPersist);
-				
-				dataObjects[index++] = dataObject;
+				DO dataObject = repository.domainObjectToDataObject(objToPersist);
+
+				dataObjects.add(dataObject);
 				dataObjectsToObjectsToPersist.put(System.identityHashCode(dataObject), objToPersist);
 			}
 
 			dao.save(dataObjects);
 
 			// update the domain object in case the data object changed
-			for (GenericDataObject dataObject : dataObjects) repository.dataObjectToDomainObject(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
+			for (DO dataObject : dataObjects) repository.dataObjectToDomainObject(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
 
 			this.notifyListenersAfterPersistExisting(objectsToPersist);
 
@@ -176,9 +174,9 @@ public class UnitOfWorkImpl implements UnitOfWork
 	 * 
 	 * @param repository the repository the UoW is created for.
 	 */
-	public UnitOfWorkImpl(GenericRepositoryImpl<?,?> repository)
+	public UnitOfWorkImpl(GenericRepositoryImpl<?,?,?> repository)
 	{
-		this(Arrays.asList(new GenericRepositoryImpl<?,?>[] { repository }));
+		this(Arrays.asList(new GenericRepositoryImpl<?,?,?>[] { repository }));
 	}
 	
 	/**
@@ -186,14 +184,14 @@ public class UnitOfWorkImpl implements UnitOfWork
 	 * 
 	 * @param repositories the repositories the UoW is created for. Pass the repositories in the order in which they should be committed / rolled back
 	 */
-	public UnitOfWorkImpl(List<GenericRepositoryImpl<?,?>> repositories)
+	public UnitOfWorkImpl(List<GenericRepositoryImpl<?,?,?>> repositories)
 	{
 		if (repositories == null) return;
 		
 		// LinkedHashMap is used here to ensure the sort order when enumerating repositories
-		this.changeLogs = new LinkedHashMap<GenericRepositoryImpl<?,?>, RepositoryChangeLog>(repositories.size());
+		this.changeLogs = new LinkedHashMap<GenericRepositoryImpl<?,?,?>, RepositoryChangeLog>(repositories.size());
 		
-		for (GenericRepositoryImpl<?,?> repository : repositories)
+		for (GenericRepositoryImpl<?,?,?> repository : repositories)
 		{
 			this.changeLogs.put(repository, new RepositoryChangeLog());
 			
@@ -209,13 +207,11 @@ public class UnitOfWorkImpl implements UnitOfWork
 		try
 		{
 			//TODO: encapsulate in transaction
-			for (GenericRepositoryImpl<?,?> repository : this.changeLogs.keySet())
+			for (GenericRepositoryImpl<?,?,?> repository : this.changeLogs.keySet())
 			{					
 				this.deleteDomainObjects(repository);
 				this.persistNewDomainObjects(repository);
 				this.persistExistingDomainObjects(repository);
-				
-				repository.resetVirtualDomainObjectId();
 			}
 		}
 		catch (DALException e)
@@ -252,7 +248,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 		{
 			Collection<Object> objectsToRollBack = new ArrayList<>();
 
-			for (GenericRepositoryImpl<?,?> repository : this.changeLogs.keySet())
+			for (GenericRepositoryImpl<?,?,?> repository : this.changeLogs.keySet())
 			{
 				RepositoryChangeLog changeLog = this.changeLogs.get(repository);
 	
@@ -301,7 +297,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 	/**
 	 * {@inheritDoc}
 	 */
-	public void onReload(GenericRepository<?,?> repository) throws DomainException
+	public void onReload(GenericRepository<?,?,?> repository) throws DomainException
 	{
 		try
 		{
@@ -314,7 +310,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 			{
 				for (Object objToRemove : changeLog.getObjectsToRemove())
 				{
-					if (objToRemove instanceof DomainObject) ((DomainObject) objToRemove).setState(State.Detached);
+					if (objToRemove instanceof DomainObject) ((DomainObject<?>) objToRemove).setState(State.Detached);
 				}
 
 				detachedObjects.addAll(changeLog.getObjectsToRemove());
@@ -325,7 +321,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 			{
 				for (Object objToAdd : changeLog.getObjectsToAdd())
 				{
-					if (objToAdd instanceof DomainObject) ((DomainObject) objToAdd).setState(State.Detached);
+					if (objToAdd instanceof DomainObject) ((DomainObject<?>) objToAdd).setState(State.Detached);
 				}
 
 				detachedObjects.addAll(changeLog.getObjectsToAdd());
@@ -348,7 +344,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 	/**
 	 * {@inheritDoc}
 	 */
-	public void onObjectAdded(GenericRepository<?,?> repository, Object obj) throws DomainException 
+	public void onObjectAdded(GenericRepository<?,?,?> repository, Object obj) throws DomainException 
 	{
 		try
 		{
@@ -370,7 +366,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 	/**
 	 * {@inheritDoc}
 	 */
-	public void onObjectRemoved(GenericRepository<?,?> repository, Object obj) throws DomainException 
+	public void onObjectRemoved(GenericRepository<?,?,?> repository, Object obj) throws DomainException 
 	{
 		try
 		{
@@ -381,8 +377,8 @@ public class UnitOfWorkImpl implements UnitOfWork
 			synchronized (changeLog.getObjectsToUpdate()) { changeLog.getObjectsToUpdate().remove(obj); }
 			synchronized (changeLog.getObjectsToAdd()) { changeLog.getObjectsToAdd().remove(obj); }
 			
-			// Only mark objects for deletion if they were persisted already
-			if ((obj instanceof DomainObject) && (((DomainObject) obj).getId() > 0))
+			// Only mark objects for deletion if they were persisted already (repository is one of the keys of the change logs)
+			if (((GenericRepositoryImpl<?,?,?>) repository).isPersisted(obj))
 			{
 				synchronized (changeLog.getObjectsToRemove()) { changeLog.getObjectsToRemove().add(obj); }
 			}
@@ -397,7 +393,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void onObjectModified(GenericRepository<?, ?> repository, Object obj) throws DomainException
+	public void onObjectModified(GenericRepository<?,?,?> repository, Object obj) throws DomainException
 	{
 		try
 		{
@@ -422,7 +418,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 		{
 			this.rollback();
 			
-			for (GenericRepository<?,?> repository : this.changeLogs.keySet()) repository.removeChangeListener(this);
+			for (GenericRepository<?,?,?> repository : this.changeLogs.keySet()) repository.removeChangeListener(this);
 			
 			this.changeLogs.clear();
 		}

@@ -18,7 +18,7 @@ public interface RepositoryChangeListener extends Closeable
 	 * @param obj the object that was added to the repository
 	 * @throws DomainException re-throws all exceptions as {@see DomainException}
 	 */
-	void onObjectAdded(GenericRepository<?,?> repository, Object obj) throws DomainException;
+	void onObjectAdded(GenericRepository<?,?,?> repository, Object obj) throws DomainException;
 	
 	/**
 	 * Called after an object is removed from the repository
@@ -27,7 +27,7 @@ public interface RepositoryChangeListener extends Closeable
 	 * @param obj the object that was removed from the repository
 	 * @throws DomainException re-throws all exceptions as {@see DomainException}
 	 */
-	void onObjectRemoved(GenericRepository<?,?> repository, Object obj) throws DomainException;
+	void onObjectRemoved(GenericRepository<?,?,?> repository, Object obj) throws DomainException;
 
 	/**
 	 * Called after an object was marked as modified by the repository
@@ -36,7 +36,7 @@ public interface RepositoryChangeListener extends Closeable
 	 * @param obj the object that was modified
 	 * @throws DomainException re-throws all exceptions as {@see DomainException}
 	 */
-	void onObjectModified(GenericRepository<?,?> repository, Object obj) throws DomainException;
+	void onObjectModified(GenericRepository<?,?,?> repository, Object obj) throws DomainException;
 	
 	/**
 	 * Called before the repository is reloaded
@@ -44,5 +44,5 @@ public interface RepositoryChangeListener extends Closeable
 	 * @param repository the repository for which to reset the change logs
 	 * @throws DomainException re-throws all exceptions as {@see DomainException}
 	 */
-	public void onReload(GenericRepository<?,?> repository) throws DomainException;
+	public void onReload(GenericRepository<?,?,?> repository) throws DomainException;
 }
