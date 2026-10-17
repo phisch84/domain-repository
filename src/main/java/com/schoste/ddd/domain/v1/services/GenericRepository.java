@@ -6,9 +6,9 @@ import java.util.stream.Stream;
 
 import com.schoste.ddd.domain.v1.exceptions.DomainException;
 import com.schoste.ddd.domain.v1.models.DomainObject;
-import com.schoste.ddd.infrastructure.dal.v2.exceptions.DALException;
-import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
-import com.schoste.ddd.infrastructure.dal.v2.services.GenericDataAccessObject;
+import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALException;
+import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
+import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
 
 /**
  * Generic interface to repositories

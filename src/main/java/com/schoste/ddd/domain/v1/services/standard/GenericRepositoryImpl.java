@@ -25,9 +25,9 @@ import com.schoste.ddd.domain.v1.services.AutoObjectConverter;
 import com.schoste.ddd.domain.v1.services.GenericRepository;
 import com.schoste.ddd.domain.v1.services.LazyRepositoryLoader;
 import com.schoste.ddd.domain.v1.services.RepositoryChangeListener;
-import com.schoste.ddd.infrastructure.dal.v2.exceptions.DALException;
-import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
-import com.schoste.ddd.infrastructure.dal.v2.services.GenericDataAccessObject;
+import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALException;
+import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
+import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
 
 /**
  * Implementation of the generic repository

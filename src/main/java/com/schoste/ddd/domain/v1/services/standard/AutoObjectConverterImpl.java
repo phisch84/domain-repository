@@ -45,7 +45,7 @@ abstract public class AutoObjectConverterImpl implements AutoObjectConverter
 		public String getClassName() { return className; }
 		public String getMethodName() { return methodName; }
 
-		public AutoSetInfo(com.schoste.ddd.infrastructure.dal.v2.annotations.AutoSet autoSet)
+		public AutoSetInfo(com.schoste.ddd.infrastructure.dal.v3.annotations.AutoSet autoSet)
 		{
 			this.clazz = autoSet.clazz();
 			this.className = autoSet.className();
@@ -98,7 +98,7 @@ abstract public class AutoObjectConverterImpl implements AutoObjectConverter
 		{
 			AutoSetInfo autoSetInfo = null;
 
-			com.schoste.ddd.infrastructure.dal.v2.annotations.AutoSet dalAnnotation = setterMethod.getAnnotation(com.schoste.ddd.infrastructure.dal.v2.annotations.AutoSet.class);
+			com.schoste.ddd.infrastructure.dal.v3.annotations.AutoSet dalAnnotation = setterMethod.getAnnotation(com.schoste.ddd.infrastructure.dal.v3.annotations.AutoSet.class);
 			if (dalAnnotation != null) autoSetInfo = new AutoSetInfo(dalAnnotation);
 
 			com.schoste.ddd.domain.v1.annotations.AutoSet domainAnnotation = setterMethod.getAnnotation(com.schoste.ddd.domain.v1.annotations.AutoSet.class);

@@ -1,7 +1,7 @@
 package com.schoste.ddd.domain.v1.services;
 
 import com.schoste.ddd.domain.v1.exceptions.DomainException;
-import com.schoste.ddd.infrastructure.dal.v2.exceptions.DALException;
+import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALException;
 
 /**
  * Interface to Units of Work (UOWs) which commit changes

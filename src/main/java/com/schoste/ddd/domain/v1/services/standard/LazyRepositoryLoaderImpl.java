@@ -8,8 +8,7 @@ import java.util.stream.Stream;
 
 import com.schoste.ddd.domain.v1.models.DomainObject;
 import com.schoste.ddd.domain.v1.services.LazyRepositoryLoader;
-import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
-import com.schoste.ddd.infrastructure.dal.v2.services.GenericLazyLoader;
+import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
  * Standart implementation of the {@link LazyRepositoryLoader} interface.
@@ -119,7 +118,7 @@ public class LazyRepositoryLoaderImpl<DO extends GenericDataObject, E extends Do
 
     /**
      * Implements {@link AutoCloseable#close()}.
-     * Called by {@link GenericLazyLoader#run()} which will be called by the encapsulating {@link Stream} class
+     * Called by {@link #run()} which will be called by the encapsulating {@link Stream} class
      * when it is closed.
      * Closes the data stream of the underlying DAO
      */

@@ -3,7 +3,7 @@ package com.schoste.ddd.domain.v1.services;
 import java.util.Spliterator;
 
 import com.schoste.ddd.domain.v1.models.DomainObject;
-import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
+import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
  * Interface to the implementation of a lazy loader that is used in {@link GenericRepository#getAll(java.util.function.Predicate)}

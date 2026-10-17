@@ -17,9 +17,9 @@ import com.schoste.ddd.domain.v1.models.DomainObject.State;
 import com.schoste.ddd.domain.v1.services.GenericRepository;
 import com.schoste.ddd.domain.v1.services.UnitOfWork;
 import com.schoste.ddd.domain.v1.services.UnitOfWorkListener;
-import com.schoste.ddd.infrastructure.dal.v2.exceptions.DALException;
-import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
-import com.schoste.ddd.infrastructure.dal.v2.services.GenericDataAccessObject;
+import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALException;
+import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
+import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
 
 /**
  * Implementation of the UOW interface
