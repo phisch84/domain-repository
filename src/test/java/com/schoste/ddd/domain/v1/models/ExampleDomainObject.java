@@ -8,7 +8,7 @@ import com.schoste.ddd.domain.v1.annotations.AutoSet;
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
  */
-public class ExampleDomainObject extends BasicDomainObject implements DomainObject
+public class ExampleDomainObject extends BasicDomainObject<Long> implements DomainObject<Long>
 {
 	private String property1;
 	private String property2;

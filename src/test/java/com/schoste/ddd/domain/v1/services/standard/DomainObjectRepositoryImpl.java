@@ -5,10 +5,10 @@ import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.schoste.ddd.domain.v1.dal.models.ExampleDO;
+import com.schoste.ddd.domain.v1.dal.services.ExampleDAO;
 import com.schoste.ddd.domain.v1.models.ExampleDomainObject;
 import com.schoste.ddd.domain.v1.services.LazyRepositoryLoader;
-import com.schoste.ddd.infrastructure.dal.v2.models.ExampleDO;
-import com.schoste.ddd.infrastructure.dal.v2.services.ExampleDAO;
 
 /**
  * Example implementation of the DomainObjectRepository interface
@@ -16,7 +16,7 @@ import com.schoste.ddd.infrastructure.dal.v2.services.ExampleDAO;
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
  */
-public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<ExampleDomainObject, ExampleDO> implements DomainObjectRepository
+public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, ExampleDomainObject, ExampleDO> implements DomainObjectRepository
 {
 	@Autowired
 	private ExampleDAO dao;
@@ -51,7 +51,7 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<ExampleDom
 	@Override
 	protected LazyRepositoryLoader<ExampleDO, ExampleDomainObject> createLazyLoader() throws Exception 
 	{
-		Stream<ExampleDO> dataSource = this.getDataAccessObject().getAll(null);
+		Stream<ExampleDO> dataSource = this.getDataAccessObject().getAll();
 		Function<ExampleDO, ExampleDomainObject> dataObjToDomainObjFn = dataObj -> this.safeDataObjectToDomainObject(dataObj);
 		LazyRepositoryLoader<ExampleDO, ExampleDomainObject> lrl = this.applicationContext.getBean(LazyRepositoryLoader.class, dataObjToDomainObjFn, dataSource);
 

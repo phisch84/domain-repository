@@ -40,9 +40,9 @@ public class ExampleDomainObjectTest extends GenericObjectTest<ExampleDomainObje
 			ExampleDomainObject equalObject1 = this.repository.createObject();
 			ExampleDomainObject equalObject2 = this.repository.createObject();
 			
-			equalObject1.setId(1);
+			equalObject1.setId(1L);
 			equalObject1.setState(State.Added);
-			equalObject2.setId(1);
+			equalObject2.setId(1L);
 			equalObject2.setState(State.Detached);
 			
 			equalObjects.add(equalObject1);
@@ -70,9 +70,9 @@ public class ExampleDomainObjectTest extends GenericObjectTest<ExampleDomainObje
 			ExampleDomainObject notEqualObject1 = this.repository.createObject();
 			ExampleDomainObject notEqualObject2 = this.repository.createObject();
 			
-			notEqualObject1.setId(1);
+			notEqualObject1.setId(1L);
 			notEqualObject1.setState(State.Detached);
-			notEqualObject2.setId(2);
+			notEqualObject2.setId(2L);
 			notEqualObject2.setState(State.Detached);
 			
 			notEqualObjects.add(notEqualObject1);

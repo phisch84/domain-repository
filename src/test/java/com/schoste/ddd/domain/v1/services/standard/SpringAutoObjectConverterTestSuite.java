@@ -4,9 +4,9 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.schoste.ddd.domain.v1.dal.models.ExampleDO;
 import com.schoste.ddd.domain.v1.models.ExampleDomainObject;
 import com.schoste.ddd.domain.v1.services.AutoObjectConverter;
-import com.schoste.ddd.infrastructure.dal.v2.models.ExampleDO;
 
 abstract public class SpringAutoObjectConverterTestSuite
 {

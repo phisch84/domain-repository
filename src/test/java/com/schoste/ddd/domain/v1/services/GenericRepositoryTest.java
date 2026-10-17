@@ -1,12 +1,16 @@
 package com.schoste.ddd.domain.v1.services;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -14,29 +18,40 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 
 import com.schoste.ddd.domain.v1.models.DomainObject;
-import com.schoste.ddd.domain.v1.models.DomainObject.State;
 import com.schoste.ddd.domain.v1.services.standard.GenericRepositoryImpl;
-import com.schoste.ddd.infrastructure.dal.v2.models.GenericDataObject;
-import com.schoste.ddd.infrastructure.dal.v2.services.GenericDataAccessObject;
+import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
+import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
 
 /**
  * Basic test class for all repository implementations
- * 
+ *
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
+ * @param <ID> the data type of the identifiers of the domain objects and data objects
  * @param <T> the domain object class
  * @param <DO> the data object class
  * @param <R> the repository class
  */
-public abstract class GenericRepositoryTest<T extends DomainObject, DO extends GenericDataObject, R extends GenericRepository<T, DO>> 
+public abstract class GenericRepositoryTest<ID extends Serializable, T extends DomainObject<ID>, DO extends GenericDataObject<ID>, R extends GenericRepository<ID, T, DO>>
 {
 	@Autowired
 	protected ApplicationContext applicationContext;
-	
+
 	@Autowired
-	protected GenericDataAccessObject<DO> repoDataAccessObject;
-	
+	protected GenericDataAccessObject<ID, DO> repoDataAccessObject;
+
 	protected abstract R getRepository();
+
+	/**
+	 * Checks if a domain object was persisted already, i.e. its id is not virtual
+	 *
+	 * @param domainObject the domain object to check
+	 * @return true if the domain object has an id which is not virtual, false otherwise
+	 */
+	protected boolean isPersisted(T domainObject)
+	{
+		return (domainObject.getId() != null) && !this.repoDataAccessObject.isVirtualId(domainObject.getId());
+	}
 	
 	/**
 	 * Gets the initialized UoW to use for committing
@@ -53,11 +68,11 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 	 * 
 	 * @return an array of repositories to be passed on to the UoW
 	 */
-	protected GenericRepositoryImpl<?,?>[] getRepositories()
+	protected GenericRepositoryImpl<?,?,?>[] getRepositories()
 	{
-		GenericRepositoryImpl<?,?>[] repositories = new GenericRepositoryImpl<?,?>[1];
-		
-		repositories[0] = (GenericRepositoryImpl<?,?>) this.getRepository();
+		GenericRepositoryImpl<?,?,?>[] repositories = new GenericRepositoryImpl<?,?,?>[1];
+
+		repositories[0] = (GenericRepositoryImpl<?,?,?>) this.getRepository();
 		
 		return repositories;
 	}
@@ -101,38 +116,62 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 	protected abstract boolean compareDomainObjects(T one, T another) throws Exception;
 	
 	/**
-	 * Resets all repositories before executing any test
+	 * Removes all data objects from the data access object and resets all repositories,
+	 * so every test starts with empty storage and doesn't leave data objects behind
+	 */
+	protected void clearAndResetRepositories() throws Exception
+	{
+		this.repoDataAccessObject.clear();
+
+		GenericRepositoryImpl<?,?,?>[] repositories = this.getRepositories();
+
+		for (GenericRepositoryImpl<?,?,?> repository : repositories) repository.reset();
+	}
+
+	/**
+	 * Clears the storage and resets all repositories before executing any test
 	 */
 	@Before
-	public void resetRepositories() throws Exception
+	public void setUp() throws Exception
 	{
-		GenericRepositoryImpl<?,?>[] repositories = this.getRepositories();
-		
-		for (GenericRepositoryImpl<?,?> repository : repositories) repository.reset();
+		this.clearAndResetRepositories();
+	}
+
+	/**
+	 * Clears the storage and resets all repositories after executing any test
+	 */
+	@After
+	public void tearDown() throws Exception
+	{
+		this.clearAndResetRepositories();
 	}
 	
 	/**
 	 * Ensures that domain objects are created correctly and filled with all
-	 * expected default values by the repo (the id of the new object is less
-	 * than zero and the state of the object is Detached).
-	 * 
+	 * expected default values by the repo (the id of the new object is
+	 * virtual and the state of the object is Detached).
+	 *
 	 * @throws Exception re-throws every exception
 	 */
 	@Test
 	public void testCreateObject() throws Exception
 	{
 		int NUM_NEW_DOS = 5;
-		Collection<Integer> domainObjectIds = new ArrayList<Integer>(NUM_NEW_DOS);
-		
+		Collection<ID> domainObjectIds = new ArrayList<ID>(NUM_NEW_DOS);
+
 		for (int i=0; i<NUM_NEW_DOS; i++)
 		{
 			T domainObject = this.createDomainObject(getEnclosingMethodName(), 0);
 
 			// Make sure the Domain Object was actually created
 			Assert.assertNotNull(domainObject);
-			
-			int domainObjectId = domainObject.getId();
-			
+
+			ID domainObjectId = domainObject.getId();
+
+			// Make sure the Domain Object has a virtual Id
+			Assert.assertNotNull(domainObjectId);
+			Assert.assertTrue(this.repoDataAccessObject.isVirtualId(domainObjectId));
+
 			// Make sure the Id of the Domain Object is equal on subsequent calls
 			Assert.assertEquals(domainObjectId, domainObject.getId());
 			Assert.assertEquals(domainObjectId, domainObject.getId());
@@ -149,71 +188,6 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 	}
 	
 	/**
-	 * Tests if objects are correctly reloaded
-	 * 
-	 * @throws Exception re-throws every exception
-	 */
-	@Test
-	public void testReload() throws Exception
-	{
-		int NUM_NEW_DOS = 10;
-		int NUM_VIRT_DOS = 5;
-		int NUM_DEL_DOS = 5;
-		
-		UnitOfWork uow = this.getUnitOfWork();
-		Collection<T> existingDomainObjects = this.getRepository().getAll();
-		
-		for (T domainObject : existingDomainObjects) this.getRepository().remove(domainObject);
-		
-		uow.commit();
-		
-		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), i));
-		
-		uow.commit();
-
-		List<T> newDomainObjects = new ArrayList<>(this.getRepository().getAll());
-		List<T> delDomainObjects = new ArrayList<>(NUM_DEL_DOS);
-		List<T> modDomainObjects = new ArrayList<>(NUM_NEW_DOS-NUM_DEL_DOS);
-		List<T> virDomainObjects = new ArrayList<>(NUM_VIRT_DOS);
-
-		for (int i=0; i<NUM_VIRT_DOS; i++) 
-		{
-			T virtualDomainObject = this.createDomainObject(getEnclosingMethodName(), NUM_NEW_DOS+i);
-			
-			this.getRepository().add(virtualDomainObject);
-			
-			virDomainObjects.add(virtualDomainObject);
-		}
-
-		Collections.shuffle(newDomainObjects);
-		
-		for (int i=0; i<NUM_DEL_DOS; i++) 
-		{
-			this.getRepository().remove(newDomainObjects.get(i));
-			
-			delDomainObjects.add(newDomainObjects.get(i));
-		}
-		
-		for (int i=NUM_DEL_DOS; i<NUM_NEW_DOS -1; i++) 
-		{
-			this.getRepository().setModified(newDomainObjects.get(i));
-			
-			modDomainObjects.add(newDomainObjects.get(i));
-		}
-		
-		T unmodifiedDomainObject = newDomainObjects.get(NUM_NEW_DOS -1);
-		
-		this.getRepository().reload();
-		
-		// If this assertion fails, make sure you set the scope of your data object to prototype in the bean definition!
-		Assert.assertEquals(State.Unchanged, unmodifiedDomainObject.getState());
-		
-		for (T domainObject : modDomainObjects) Assert.assertEquals(State.Unchanged, domainObject.getState());
-		for (T domainObject : delDomainObjects) Assert.assertEquals(State.Detached, domainObject.getState());
-		for (T domainObject : virDomainObjects) Assert.assertEquals(State.Detached, domainObject.getState());
-	}
-	
-	/**
 	 * Tests if an added object can be retrieved by its id without committing it
 	 * 
 	 * @throws Exception re-throws every exception
@@ -222,10 +196,10 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 	public void testAddAndGetWithoutCommit() throws Exception
 	{
 		T newDomainObject = this.createDomainObject(getEnclosingMethodName(), 0);
-		int domainObjectId = newDomainObject.getId();
-		
+		ID domainObjectId = newDomainObject.getId();
+
 		this.getRepository().add(newDomainObject);
-		
+
 		T domainObject = this.getRepository().get(domainObjectId);
 		
 		Assert.assertNotNull(domainObject);
@@ -244,12 +218,12 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 		UnitOfWork uow = this.getUnitOfWork();
 
 		T newDomainObject = this.createDomainObject(getEnclosingMethodName(), 0);
-		int oldDomainObjectId = newDomainObject.getId();
-		
+		ID oldDomainObjectId = newDomainObject.getId();
+
 		this.getRepository().add(newDomainObject);
-		
+
 		uow.commit();
-		
+
 		Assert.assertNotEquals(oldDomainObjectId, newDomainObject.getId());
 		
 		T domainObject = this.getRepository().get(newDomainObject.getId());
@@ -275,17 +249,17 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 		
 		Collection<T> oldDomainObjects = this.getRepository().getAll();
 		T newDomainObject = this.createDomainObject(getEnclosingMethodName(), 0);
-		int oldDomainObjectId = newDomainObject.getId();
-		
+		ID oldDomainObjectId = newDomainObject.getId();
+
 		this.getRepository().add(newDomainObject);
-		
+
 		Assert.assertEquals(DomainObject.State.Added, newDomainObject.getState());
 		Assert.assertEquals(oldDomainObjectId, newDomainObject.getId());
-		
+
 		uow.commit();
-		
+
 		Assert.assertEquals(DomainObject.State.Unchanged, newDomainObject.getState());
-		Assert.assertTrue(newDomainObject.getId() > 0);
+		Assert.assertTrue(this.isPersisted(newDomainObject));
 
 		Collection<T> gotDomainObjects = this.getRepository().getAll();
 		
@@ -372,7 +346,7 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 		UnitOfWork uow = this.getUnitOfWork();
 		
 		T newDomainObject = this.createDomainObject(getEnclosingMethodName(), 0);
-		int newDomainObjectId = newDomainObject.getId();
+		ID newDomainObjectId = newDomainObject.getId();
 		
 		Assert.assertEquals(DomainObject.State.Detached, newDomainObject.getState());
 		Assert.assertEquals(newDomainObjectId, newDomainObject.getId());
@@ -477,7 +451,7 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 		
 		Assert.assertEquals(oldDomainObjects.size() + NUM_NEW_DOS, addedDomainObjectsList.size());
 
-		for (T domainObject : addedDomainObjectsList) Assert.assertNotEquals(0, domainObject.getId()); 
+		for (T domainObject : addedDomainObjectsList) Assert.assertTrue(this.isPersisted(domainObject));
 		
 		
 		// Remove some domain objects from the added objects
@@ -540,9 +514,9 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 		
 		uow.commit();
 		
-		int objectId = newDomainObject.getId();
-		
-		((GenericRepositoryImpl<?,?>)this.getRepository()).reset();
+		ID objectId = newDomainObject.getId();
+
+		((GenericRepositoryImpl<?,?,?>)this.getRepository()).reset();
 		
 		T hopefullyLoadedDomainObject = this.getRepository().get(objectId);
 		
@@ -561,9 +535,9 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 	{
 		try (Stream<T> doStream = this.getRepository().getAll(null))
 		{
-			// New IDs can be anything greater than 0
-			doStream.forEach(domainObject 
-				-> Assert.assertTrue(domainObject.getId() > 0));
+			// Loaded domain objects were persisted, so their ids can't be virtual
+			doStream.forEach(domainObject
+				-> Assert.assertTrue(this.isPersisted(domainObject)));
 		}
 	}
 
@@ -576,9 +550,23 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 	@Test
 	public void testGetAllStreamedWithPredicate() throws Exception
 	{
-		int expectedMinId = 5;
+		int NUM_NEW_DOS = 6;
 
-		try (Stream<T> doStream = this.getRepository().getAll(domainObject -> domainObject.getId() > expectedMinId))
+		UnitOfWork uow = this.getUnitOfWork();
+
+		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), i));
+
+		uow.commit();
+
+		// The filter predicate is supposed to pass every other domain object
+		List<T> allDomainObjects = new ArrayList<T>(this.getRepository().getAll());
+		Set<ID> expectedIds = new HashSet<ID>();
+
+		for (int i=0; i<allDomainObjects.size(); i+=2) expectedIds.add(allDomainObjects.get(i).getId());
+
+		Set<ID> actualIds = new HashSet<ID>();
+
+		try (Stream<T> doStream = this.getRepository().getAll(domainObject -> expectedIds.contains(domainObject.getId())))
 		{
 			Iterator<T> it = doStream.iterator();
 
@@ -586,8 +574,12 @@ public abstract class GenericRepositoryTest<T extends DomainObject, DO extends G
 			{
 				T domainObject = it.next();
 
-				Assert.assertTrue(domainObject.getId() > expectedMinId);
+				Assert.assertTrue(expectedIds.contains(domainObject.getId()));
+
+				actualIds.add(domainObject.getId());
 			}
 		}
+
+		Assert.assertEquals(expectedIds, actualIds);
 	}
 }

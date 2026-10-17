@@ -1,13 +1,14 @@
-package com.schoste.ddd.infrastructure.dal.v2.models;
+package com.schoste.ddd.domain.v1.dal.models;
 
-import com.schoste.ddd.infrastructure.dal.v2.annotations.AutoSet;
+import com.schoste.ddd.infrastructure.dal.v3.annotations.AutoSet;
+import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
  * Example data object used in the DomainObjectRepository
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
  */
-public class ExampleDO extends GenericDataObject
+public class ExampleDO extends GenericDataObject<Long>
 {
 	private String property1;
 	private String property2;

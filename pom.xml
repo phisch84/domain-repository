@@ -24,7 +24,7 @@
     <repositories>
         <repository>
             <id>github</id>
-            <url>https://maven.pkg.github.com/phisch84/dao-fs-serialization</url>
+            <url>https://maven.pkg.github.com/phisch84/dao</url>
         </repository>
     </repositories>
 
