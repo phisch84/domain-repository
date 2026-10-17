@@ -6,11 +6,11 @@
     http://www.springframework.org/schema/beans
     http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
     
-    <bean id="DomainObjectRepository" class="com.schoste.ddd.domain.v1.services.standard.DomainObjectRepositoryImpl" scope="singleton" />
-	<bean id="DomainObject" class="com.schoste.ddd.domain.v1.models.ExampleDomainObject" scope="prototype" />
-	<bean id="UnitOfWork" class="com.schoste.ddd.domain.v1.services.standard.UnitOfWorkImpl" scope="prototype" />
-	<bean id="AutoObjectConverter" class="com.schoste.ddd.domain.v1.services.standard.SpringAutoObjectConverterImpl" scope="prototype" />
-    <bean id="ExampleDO" class="com.schoste.ddd.domain.v1.dal.models.ExampleDO" scope="prototype" />
-    <bean id="ExampleDAO" class="com.schoste.ddd.domain.v1.dal.services.mocked.ExampleDAOImpl" scope="singleton" />
-    <bean id="LazyRepositoryLoader" class="com.schoste.ddd.domain.v1.services.standard.LazyRepositoryLoaderImpl" scope="prototype" />
+    <bean id="DomainObjectRepository" class="com.schoste.ddd.domain.v2.services.standard.DomainObjectRepositoryImpl" scope="singleton" />
+	<bean id="DomainObject" class="com.schoste.ddd.domain.v2.models.ExampleDomainObject" scope="prototype" />
+	<bean id="UnitOfWork" class="com.schoste.ddd.domain.v2.services.standard.UnitOfWorkImpl" scope="prototype" />
+	<bean id="AutoObjectConverter" class="com.schoste.ddd.domain.v2.services.standard.SpringAutoObjectConverterImpl" scope="prototype" />
+    <bean id="ExampleDO" class="com.schoste.ddd.domain.v2.dal.models.ExampleDO" scope="prototype" />
+    <bean id="ExampleDAO" class="com.schoste.ddd.domain.v2.dal.services.mocked.ExampleDAOImpl" scope="singleton" />
+    <bean id="LazyRepositoryLoader" class="com.schoste.ddd.domain.v2.services.standard.LazyRepositoryLoaderImpl" scope="prototype" />
 </beans>

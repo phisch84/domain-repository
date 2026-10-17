@@ -1,0 +1,1 @@
+package com.schoste.ddd.domain.v2.models;
