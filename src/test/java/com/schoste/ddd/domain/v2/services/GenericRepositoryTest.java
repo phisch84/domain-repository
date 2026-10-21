@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.After;
@@ -243,7 +244,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 	{
 		UnitOfWork uow = this.getUnitOfWork();
 		
-		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).collect(Collectors.toList());
 		T newDomainObject = this.createDomainObject(getEnclosingMethodName(), 0);
 		ID oldDomainObjectId = newDomainObject.getId();
 
@@ -257,7 +258,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 		Assert.assertEquals(Entity.State.Unchanged, newDomainObject.getState());
 		Assert.assertTrue(this.isPersisted(newDomainObject));
 
-		Collection<T> gotDomainObjects = this.getRepository().getAll(false).toList();
+		Collection<T> gotDomainObjects = this.getRepository().getAll(false).collect(Collectors.toList());
 		
 		Assert.assertEquals(oldDomainObjects.size() +1, gotDomainObjects.size());
 		
@@ -294,12 +295,12 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 		
 		UnitOfWork uow = this.getUnitOfWork();
 		
-		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).collect(Collectors.toList());
 		
 		// Add new Domain Objects for committing
 		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), i));
 		
-		Collection<T> newDomainObjects = this.getRepository().getAll(false).toList();
+		Collection<T> newDomainObjects = this.getRepository().getAll(false).collect(Collectors.toList());
 		
 		Assert.assertEquals(oldDomainObjects.size() +NUM_NEW_DOS, newDomainObjects.size());
 
@@ -308,7 +309,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 		// Add new Domain Objects after committing and see if all objects are in the repository
 		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), NUM_NEW_DOS+i));
 		
-		Collection<T> newNewDomainObjects = this.getRepository().getAll(false).toList();
+		Collection<T> newNewDomainObjects = this.getRepository().getAll(false).collect(Collectors.toList());
 		
 		Assert.assertEquals(oldDomainObjects.size() +NUM_NEW_DOS+NUM_NEW_DOS, newNewDomainObjects.size());
 		
@@ -383,7 +384,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 		
 		Assert.assertEquals(Entity.State.Detached, newDomainObject.getState());
 		
-		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
+		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).collect(Collectors.toList()));
 		
 		Assert.assertFalse(domainObjectsList.contains(newDomainObject));
 	}
@@ -405,7 +406,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 		
 		uow.commit();
 		
-		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).collect(Collectors.toList());
 		
 		this.getRepository().remove(newDomainObject);
 		
@@ -414,7 +415,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 
 		uow.commit();
 
-		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
+		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).collect(Collectors.toList()));
 		
 		Assert.assertEquals(oldDomainObjects.size() -1, domainObjectsList.size());
 		Assert.assertFalse(domainObjectsList.contains(newDomainObject));
@@ -436,14 +437,14 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 		
 		UnitOfWork uow = this.getUnitOfWork();
 
-		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).collect(Collectors.toList());
 		
 		// Add some domain objects
 		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), i));
 				
 		uow.commit();
 		
-		ArrayList<T> addedDomainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
+		ArrayList<T> addedDomainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).collect(Collectors.toList()));
 		
 		Assert.assertEquals(oldDomainObjects.size() + NUM_NEW_DOS, addedDomainObjectsList.size());
 
@@ -470,7 +471,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends E
 		
 		uow.commit();
 
-		ArrayList<T> actualDomainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
+		ArrayList<T> actualDomainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).collect(Collectors.toList()));
 		
 		for (int i=0; i<toRemoveDomainObjectsList.size(); i++)
 		{

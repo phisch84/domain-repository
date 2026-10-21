@@ -12,5 +12,5 @@
 	<bean id="AutoObjectConverter" class="com.schoste.ddd.domain.v2.services.standard.SpringAutoObjectConverterImpl" scope="prototype" />
     <bean id="ExampleDO" class="com.schoste.ddd.domain.v2.dal.models.ExampleDO" scope="prototype" />
     <bean id="ExampleDAO" class="com.schoste.ddd.domain.v2.dal.services.mocked.ExampleDAOImpl" scope="singleton" />
-    <bean id="LazyRepositoryLoader" class="com.schoste.ddd.domain.v2.services.standard.LazyRepositoryLoaderImpl" scope="prototype" />
+    <bean id="GenericEntityLoader" class="com.schoste.ddd.domain.v2.services.standard.GenericEntityLoaderImpl" scope="prototype" />
 </beans>
