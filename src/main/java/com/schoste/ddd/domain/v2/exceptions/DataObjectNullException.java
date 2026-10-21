@@ -2,7 +2,7 @@ package com.schoste.ddd.domain.v2.exceptions;
 
 /**
  * Indicates that no instance for a Data Object (DO) could be created.
- * This might be because the {@see GenericDAO#createDataObject()} method returns
+ * This might be because the {@link GenericDAO#createDataObject()} method returns
  * null on the implementing class.
  *  
  * @author Philipp Schosteritsch <s.philipp@schoste.com>

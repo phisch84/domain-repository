@@ -34,25 +34,10 @@
             <artifactId>dao</artifactId>
             <version>${ddd.dao.version}</version>
         </dependency>
-
         <dependency>
             <groupId>com.schoste.ddd.infrastructure</groupId>
             <artifactId>dao-fs-serialization</artifactId>
             <version>${ddd.dao-fs.version}</version>
-        </dependency>
-
-        <!-- Spring (DI/AOP/IoC Framework) dependencies -->
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-core</artifactId>
-            <version>${spring.version}</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-context</artifactId>
-            <version>${spring.version}</version>
-            <scope>compile</scope>
         </dependency>
 
         <dependency>
@@ -73,6 +58,20 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring (DI/AOP/IoC Framework) dependencies -->
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-core</artifactId>
+            <version>${spring.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <version>${spring.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

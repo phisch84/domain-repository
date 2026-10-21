@@ -12,9 +12,9 @@ public class DomainException extends Exception
 	private static final long serialVersionUID = 294841790973695190L;
 
 	/**
-	 * Instance to a handler for {@see DomainException}.
-	 * If not null {@ DomainExceptionHandler#onExceptionCreated(DomainException)} will be
-	 * called whenever a {@see DomainException} is created.
+	 * Instance to a handler for {@link DomainException}.
+	 * If not null {@link DomainExceptionHandler#onExceptionCreated(DomainException)} will be
+	 * called whenever a {@link DomainException} is created.
 	 */
 	public static DomainExceptionHandler handler = null;
 

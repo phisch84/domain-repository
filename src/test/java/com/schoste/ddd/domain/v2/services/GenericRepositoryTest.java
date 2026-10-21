@@ -4,10 +4,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
 import java.util.stream.Stream;
 
 import org.junit.After;
@@ -17,9 +13,7 @@ import org.junit.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 
-import com.schoste.ddd.domain.v2.models.DomainObject;
-import com.schoste.ddd.domain.v2.services.GenericRepository;
-import com.schoste.ddd.domain.v2.services.UnitOfWork;
+import com.schoste.ddd.domain.v2.entities.Entity;
 import com.schoste.ddd.domain.v2.services.standard.GenericRepositoryImpl;
 import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
@@ -34,7 +28,7 @@ import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
  * @param <DO> the data object class
  * @param <R> the repository class
  */
-public abstract class GenericRepositoryTest<ID extends Serializable, T extends DomainObject<ID>, DO extends GenericDataObject<ID>, R extends GenericRepository<ID, T, DO>>
+public abstract class GenericRepositoryTest<ID extends Serializable, T extends Entity<ID>, DO extends GenericDataObject<ID>, R extends GenericRepository<ID, T, DO>>
 {
 	@Autowired
 	protected ApplicationContext applicationContext;
@@ -95,7 +89,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 	 */
 	protected T createDomainObject(String callingMethodName, int callId) throws Exception
 	{
-		return this.getRepository().createObject();
+		return this.getRepository().createEntity();
 	}
 	
 	/**
@@ -184,7 +178,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 			domainObjectIds.add(domainObject.getId());
 
 			// Make sure the state of the new Domain Object is Detached
-			Assert.assertEquals(DomainObject.State.Detached, domainObject.getState());
+			Assert.assertEquals(Entity.State.Detached, domainObject.getState());
 			
 		}
 	}
@@ -249,28 +243,28 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 	{
 		UnitOfWork uow = this.getUnitOfWork();
 		
-		Collection<T> oldDomainObjects = this.getRepository().getAll();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
 		T newDomainObject = this.createDomainObject(getEnclosingMethodName(), 0);
 		ID oldDomainObjectId = newDomainObject.getId();
 
 		this.getRepository().add(newDomainObject);
 
-		Assert.assertEquals(DomainObject.State.Added, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Added, newDomainObject.getState());
 		Assert.assertEquals(oldDomainObjectId, newDomainObject.getId());
 
 		uow.commit();
 
-		Assert.assertEquals(DomainObject.State.Unchanged, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Unchanged, newDomainObject.getState());
 		Assert.assertTrue(this.isPersisted(newDomainObject));
 
-		Collection<T> gotDomainObjects = this.getRepository().getAll();
+		Collection<T> gotDomainObjects = this.getRepository().getAll(false).toList();
 		
 		Assert.assertEquals(oldDomainObjects.size() +1, gotDomainObjects.size());
 		
 		for (T oldDomainObject : oldDomainObjects)
 		{
 			Assert.assertNotEquals(oldDomainObject, newDomainObject);
-			Assert.assertEquals(DomainObject.State.Unchanged, oldDomainObject.getState());
+			Assert.assertEquals(Entity.State.Unchanged, oldDomainObject.getState());
 		}
 		
 		boolean wasEqual = true;
@@ -300,12 +294,12 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 		
 		UnitOfWork uow = this.getUnitOfWork();
 		
-		Collection<T> oldDomainObjects = this.getRepository().getAll();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
 		
 		// Add new Domain Objects for committing
 		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), i));
 		
-		Collection<T> newDomainObjects = this.getRepository().getAll();
+		Collection<T> newDomainObjects = this.getRepository().getAll(false).toList();
 		
 		Assert.assertEquals(oldDomainObjects.size() +NUM_NEW_DOS, newDomainObjects.size());
 
@@ -314,7 +308,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 		// Add new Domain Objects after committing and see if all objects are in the repository
 		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), NUM_NEW_DOS+i));
 		
-		Collection<T> newNewDomainObjects = this.getRepository().getAll();
+		Collection<T> newNewDomainObjects = this.getRepository().getAll(false).toList();
 		
 		Assert.assertEquals(oldDomainObjects.size() +NUM_NEW_DOS+NUM_NEW_DOS, newNewDomainObjects.size());
 		
@@ -326,10 +320,10 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 			T domainObject = newNewDomainObjectsList.get(i);
 			
 			// If the Domain Object was committed, its state is supposed to be Unchanged 
-			if (newDomainObjects.contains(domainObject)) Assert.assertEquals(DomainObject.State.Unchanged, domainObject.getState());
+			if (newDomainObjects.contains(domainObject)) Assert.assertEquals(Entity.State.Unchanged, domainObject.getState());
 			
 			// otherwise it should still be Added
-			else Assert.assertEquals(DomainObject.State.Added, domainObject.getState());
+			else Assert.assertEquals(Entity.State.Added, domainObject.getState());
 		}
 	}
 
@@ -350,22 +344,22 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 		T newDomainObject = this.createDomainObject(getEnclosingMethodName(), 0);
 		ID newDomainObjectId = newDomainObject.getId();
 		
-		Assert.assertEquals(DomainObject.State.Detached, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Detached, newDomainObject.getState());
 		Assert.assertEquals(newDomainObjectId, newDomainObject.getId());
 
 		this.getRepository().add(newDomainObject);
 
-		Assert.assertEquals(DomainObject.State.Added, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Added, newDomainObject.getState());
 		Assert.assertEquals(newDomainObjectId, newDomainObject.getId());
 
 		this.getRepository().add(newDomainObject);
 
-		Assert.assertEquals(DomainObject.State.Added, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Added, newDomainObject.getState());
 		Assert.assertEquals(newDomainObjectId, newDomainObject.getId());
 		
 		uow.commit();
 
-		Assert.assertEquals(DomainObject.State.Unchanged, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Unchanged, newDomainObject.getState());
 		Assert.assertNotEquals(newDomainObjectId, newDomainObject.getId());
 	}
 
@@ -387,9 +381,9 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 		this.getRepository().add(newDomainObject);
 		this.getRepository().remove(newDomainObject);
 		
-		Assert.assertEquals(DomainObject.State.Detached, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Detached, newDomainObject.getState());
 		
-		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll());
+		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
 		
 		Assert.assertFalse(domainObjectsList.contains(newDomainObject));
 	}
@@ -411,22 +405,22 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 		
 		uow.commit();
 		
-		Collection<T> oldDomainObjects = this.getRepository().getAll();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
 		
 		this.getRepository().remove(newDomainObject);
 		
 		// Before the repo is committed, the state is supposed to be Deleted
-		Assert.assertEquals(DomainObject.State.Deleted, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Deleted, newDomainObject.getState());
 
 		uow.commit();
 
-		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll());
+		ArrayList<T> domainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
 		
 		Assert.assertEquals(oldDomainObjects.size() -1, domainObjectsList.size());
 		Assert.assertFalse(domainObjectsList.contains(newDomainObject));
 		
 		// After the repo is committed, the state is supposed to be Detached
-		Assert.assertEquals(DomainObject.State.Detached, newDomainObject.getState());
+		Assert.assertEquals(Entity.State.Detached, newDomainObject.getState());
 	}
 	
 	/**
@@ -442,14 +436,14 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 		
 		UnitOfWork uow = this.getUnitOfWork();
 
-		Collection<T> oldDomainObjects = this.getRepository().getAll();
+		Collection<T> oldDomainObjects = this.getRepository().getAll(false).toList();
 		
 		// Add some domain objects
 		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), i));
 				
 		uow.commit();
 		
-		ArrayList<T> addedDomainObjectsList = new ArrayList<T>(this.getRepository().getAll());
+		ArrayList<T> addedDomainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
 		
 		Assert.assertEquals(oldDomainObjects.size() + NUM_NEW_DOS, addedDomainObjectsList.size());
 
@@ -471,19 +465,19 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 			this.getRepository().remove(domainObjectToRemove);
 			
 			// Before the repo is committed, the state is supposed to be Deleted
-			Assert.assertEquals(DomainObject.State.Deleted, domainObjectToRemove.getState());
+			Assert.assertEquals(Entity.State.Deleted, domainObjectToRemove.getState());
 		}
 		
 		uow.commit();
 
-		ArrayList<T> actualDomainObjectsList = new ArrayList<T>(this.getRepository().getAll());
+		ArrayList<T> actualDomainObjectsList = new ArrayList<T>(this.getRepository().getAll(false).toList());
 		
 		for (int i=0; i<toRemoveDomainObjectsList.size(); i++)
 		{
 			T domainObjectToRemove = toRemoveDomainObjectsList.get(i);
 
 			// After the repo is committed, the state is supposed to be Detached
-			Assert.assertEquals(DomainObject.State.Detached, domainObjectToRemove.getState());
+			Assert.assertEquals(Entity.State.Detached, domainObjectToRemove.getState());
 			
 			Assert.assertFalse(actualDomainObjectsList.contains(domainObjectToRemove));
 		}
@@ -497,7 +491,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 			Assert.assertTrue(actualDomainObjectsList.contains(existingDomainObject));
 
 			// After the repo is committed, the state is supposed to be Unchanged
-			Assert.assertEquals(DomainObject.State.Unchanged, existingDomainObject.getState());			
+			Assert.assertEquals(Entity.State.Unchanged, existingDomainObject.getState());			
 		}
 	}
 
@@ -535,7 +529,7 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 	@Test
 	public void testGetAllStreamedWithoutPredicate() throws Exception
 	{
-		try (Stream<T> doStream = this.getRepository().getAll(null))
+		try (Stream<T> doStream = this.getRepository().getAll(false))
 		{
 			// Loaded domain objects were persisted, so their ids can't be virtual
 			doStream.forEach(domainObject
@@ -543,45 +537,4 @@ public abstract class GenericRepositoryTest<ID extends Serializable, T extends D
 		}
 	}
 
-	/**
-	 * Asserts that the {@link GenericRepository#getAll(java.util.function.Predicate)} method of a Repository implementation
-	 * actually returns a stream with all expected objects that are supposed to pass the filter predicate
-	 * 
-	 * @throws Exception re-throws every exception
-	 */
-	@Test
-	public void testGetAllStreamedWithPredicate() throws Exception
-	{
-		int NUM_NEW_DOS = 6;
-
-		UnitOfWork uow = this.getUnitOfWork();
-
-		for (int i=0; i<NUM_NEW_DOS; i++) this.getRepository().add(this.createDomainObject(getEnclosingMethodName(), i));
-
-		uow.commit();
-
-		// The filter predicate is supposed to pass every other domain object
-		List<T> allDomainObjects = new ArrayList<T>(this.getRepository().getAll());
-		Set<ID> expectedIds = new HashSet<ID>();
-
-		for (int i=0; i<allDomainObjects.size(); i+=2) expectedIds.add(allDomainObjects.get(i).getId());
-
-		Set<ID> actualIds = new HashSet<ID>();
-
-		try (Stream<T> doStream = this.getRepository().getAll(domainObject -> expectedIds.contains(domainObject.getId())))
-		{
-			Iterator<T> it = doStream.iterator();
-
-			while (it.hasNext())
-			{
-				T domainObject = it.next();
-
-				Assert.assertTrue(expectedIds.contains(domainObject.getId()));
-
-				actualIds.add(domainObject.getId());
-			}
-		}
-
-		Assert.assertEquals(expectedIds, actualIds);
-	}
 }

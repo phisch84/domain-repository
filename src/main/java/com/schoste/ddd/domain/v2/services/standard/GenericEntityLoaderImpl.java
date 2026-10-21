@@ -1,23 +1,29 @@
 package com.schoste.ddd.domain.v2.services.standard;
 
+import java.io.Serializable;
+import java.util.ArrayDeque;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.Queue;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import com.schoste.ddd.domain.v2.models.DomainObject;
-import com.schoste.ddd.domain.v2.services.LazyRepositoryLoader;
+import com.schoste.ddd.domain.v2.entities.Entity;
+import com.schoste.ddd.domain.v2.services.GenericEntityLoader;
 import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
- * Standart implementation of the {@link LazyRepositoryLoader} interface.
+ * Standart implementation of the {@link GenericEntityLoader} interface.
  *
- * @param <DO> the data type of the data objects that will be converted to domain objects
- * @param <E> the data type of the domain objects to return
+ * @param <ID> the data type of the unique identifier of the {@link Entity} and its corresponding {@link GenericDataObject}
+ * @param <DO> the data type of data objects loaded from the underlying DAO
+ * @param <E> the actual data type of the domain objects that are lazily loaded
  */
-public class LazyRepositoryLoaderImpl<DO extends GenericDataObject<?>, E extends DomainObject<?>> implements LazyRepositoryLoader<DO, E>
+public class GenericEntityLoaderImpl<ID extends Serializable, DO extends GenericDataObject<ID>, E extends Entity<ID>> implements GenericEntityLoader<ID, DO, E>
 {
+    protected Queue<E> cachedEntities;
     protected Function<DO, E> dataObjToDomainObjFunction;
     protected Stream<DO> dataObjStream;
     protected Iterator<DO> dataObjStreamIterator;
@@ -29,11 +35,13 @@ public class LazyRepositoryLoaderImpl<DO extends GenericDataObject<?>, E extends
      * @param dataObjStream a stream (usually to a DAO) that provides the data objects of the domain objects
      * @throws IllegalArgumentException thrown if either dataObjToDomainObjFunction or dataObjStream is null
      */
-    public LazyRepositoryLoaderImpl(Function<DO, E> dataObjToDomainObjFunction, Stream<DO> dataObjStream) throws IllegalArgumentException
+    public GenericEntityLoaderImpl(Collection<E> cachedEntities, Stream<DO> dataObjStream, Function<DO, E> dataObjToDomainObjFunction) throws IllegalArgumentException
     {
-        if (dataObjToDomainObjFunction == null) throw new IllegalArgumentException();
+        if (cachedEntities == null) throw new IllegalArgumentException();
         if (dataObjStream == null) throw new IllegalArgumentException();
+        if (dataObjToDomainObjFunction == null) throw new IllegalArgumentException();
 
+        this.cachedEntities = new ArrayDeque<>(cachedEntities);
         this.dataObjToDomainObjFunction = dataObjToDomainObjFunction;
         this.dataObjStream = dataObjStream;
         this.dataObjStreamIterator = this.dataObjStream.iterator();
@@ -50,14 +58,27 @@ public class LazyRepositoryLoaderImpl<DO extends GenericDataObject<?>, E extends
     public boolean tryAdvance(Consumer<? super E> action) 
     {
         if (this.dataObjStreamIterator == null) return false;
-        if (!this.dataObjStreamIterator.hasNext()) return false;
 
-        DO dataObj = this.dataObjStreamIterator.next();
-        E domainObj = this.dataObjToDomainObjFunction.apply(dataObj);
+        if (!this.cachedEntities.isEmpty())
+        {
+            E domainObj = this.cachedEntities.poll();
 
-        action.accept(domainObj);
+            action.accept(domainObj);
 
-        return true;
+            return true;
+        }
+
+        if (this.dataObjStreamIterator.hasNext())
+        {
+            DO dataObj = this.dataObjStreamIterator.next();
+            E domainObj = this.dataObjToDomainObjFunction.apply(dataObj);
+
+            action.accept(domainObj);
+
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -130,5 +151,4 @@ public class LazyRepositoryLoaderImpl<DO extends GenericDataObject<?>, E extends
         this.dataObjStreamIterator = null;
         this.dataObjStream = null;
     }
-
 }

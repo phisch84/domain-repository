@@ -1,16 +1,16 @@
-package com.schoste.ddd.domain.v2.models;
+package com.schoste.ddd.domain.v2.entities;
 
 import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * Basic domain object implementation
+ * Basic entity implementation
  *
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
- * @param <ID> the data type of the domain object's identifier
+ * @param <ID> the data type of the entity's identifier
  */
-public abstract class BasicDomainObject<ID extends Serializable> implements DomainObject<ID>
+public abstract class BasicEntity<ID extends Serializable> implements Entity<ID>
 {
 	protected ID id;
 	protected State state;
@@ -18,7 +18,7 @@ public abstract class BasicDomainObject<ID extends Serializable> implements Doma
 	/**
 	 * Creates a new instance with a detached state and no id (null)
 	 */
-	public BasicDomainObject()
+	public BasicEntity()
 	{
 		this.state = State.Detached;
 		this.id = null;
@@ -67,7 +67,7 @@ public abstract class BasicDomainObject<ID extends Serializable> implements Doma
 		if (obj == null) return false;
 		if (getClass() != obj.getClass()) return false;
 
-		BasicDomainObject<?> other = (BasicDomainObject<?>) obj;
+		BasicEntity<?> other = (BasicEntity<?>) obj;
 
 		return Objects.equals(this.id, other.id);
 	}

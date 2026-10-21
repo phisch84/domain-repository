@@ -38,7 +38,7 @@ public class DomainObjectRepositoryUnitTest extends DomainObjectRepositoryTestSu
 	@Override
 	protected ExampleDomainObject createDomainObject(String callingMethodName, int callId) throws Exception
 	{
-		ExampleDomainObject domainObject = this.getRepository().createObject();
+		ExampleDomainObject domainObject = this.getRepository().createEntity();
 		
 		domainObject.setProperty1(String.format("%s_%s", callingMethodName, callId));
 		domainObject.setProperty2(String.format("%s_%s_%s", callingMethodName, callId, callId));

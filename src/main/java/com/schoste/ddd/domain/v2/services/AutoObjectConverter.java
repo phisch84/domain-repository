@@ -13,7 +13,7 @@ public interface AutoObjectConverter
 	/**
 	 * Enriches the property of a given object with properties from another object.
 	 * Which properties of the target object are set is defined by methods annotated
-	 * with the {@see com.schoste.ddd.domain.annotations.AutoSet} annotation.
+	 * with the {@link com.schoste.ddd.domain.v2.annotations.AutoSet} annotation.
 	 * 
 	 * @param src the object to get the data from
 	 * @param dst the object to write the data to

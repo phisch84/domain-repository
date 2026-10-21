@@ -10,7 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
-import com.schoste.ddd.domain.v2.models.DomainObject.State;
+import com.schoste.ddd.domain.v2.entities.Entity.State;
 import com.schoste.ddd.domain.v2.services.standard.DomainObjectRepository;
 import com.schoste.ddd.testing.v1.GenericObjectTest;
 
@@ -37,8 +37,8 @@ public class ExampleDomainObjectTest extends GenericObjectTest<ExampleDomainObje
 		{
 			Collection<ExampleDomainObject> equalObjects = new ArrayList<ExampleDomainObject>();
 	
-			ExampleDomainObject equalObject1 = this.repository.createObject();
-			ExampleDomainObject equalObject2 = this.repository.createObject();
+			ExampleDomainObject equalObject1 = this.repository.createEntity();
+			ExampleDomainObject equalObject2 = this.repository.createEntity();
 			
 			equalObject1.setId(1L);
 			equalObject1.setState(State.Added);
@@ -67,8 +67,8 @@ public class ExampleDomainObjectTest extends GenericObjectTest<ExampleDomainObje
 		{
 			Collection<ExampleDomainObject> notEqualObjects = new ArrayList<ExampleDomainObject>();
 	
-			ExampleDomainObject notEqualObject1 = this.repository.createObject();
-			ExampleDomainObject notEqualObject2 = this.repository.createObject();
+			ExampleDomainObject notEqualObject1 = this.repository.createEntity();
+			ExampleDomainObject notEqualObject2 = this.repository.createEntity();
 			
 			notEqualObject1.setId(1L);
 			notEqualObject1.setState(State.Detached);

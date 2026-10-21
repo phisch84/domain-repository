@@ -17,14 +17,14 @@ public interface UnitOfWork extends RepositoryChangeListener
 	 * @throws IllegalStateException thrown if an object in a repository does not implement the DomainObject interface
 	 * 
 	 * @throws DALException re-throws exceptions from the data access layer
-	 * @throws DomainException re-throws all exceptions as {@see DomainException}
+	 * @throws DomainException re-throws all exceptions as {@link DomainException}
 	 */
 	public void commit() throws DALException, DomainException;
 	
 	/**
 	 * Reverts all changes of the repositories
 	 * 
-	 * @throws DomainException re-throws all exceptions as {@see DomainException}
+	 * @throws DomainException re-throws all exceptions as {@link DomainException}
 	 */
 	public void rollback() throws DomainException;
 

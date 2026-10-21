@@ -1,8 +1,8 @@
 package com.schoste.ddd.domain.v2.models;
 
 import com.schoste.ddd.domain.v2.annotations.AutoSet;
-import com.schoste.ddd.domain.v2.models.BasicDomainObject;
-import com.schoste.ddd.domain.v2.models.DomainObject;
+import com.schoste.ddd.domain.v2.entities.BasicEntity;
+import com.schoste.ddd.domain.v2.entities.Entity;
 
 /**
  * Example implementation of the domain object interface
@@ -10,7 +10,7 @@ import com.schoste.ddd.domain.v2.models.DomainObject;
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
  */
-public class ExampleDomainObject extends BasicDomainObject<Long> implements DomainObject<Long>
+public class ExampleDomainObject extends BasicEntity<Long> implements Entity<Long>
 {
 	private String property1;
 	private String property2;

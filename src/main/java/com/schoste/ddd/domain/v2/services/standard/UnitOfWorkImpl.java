@@ -12,9 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.schoste.ddd.domain.v2.entities.Entity;
+import com.schoste.ddd.domain.v2.entities.Entity.State;
 import com.schoste.ddd.domain.v2.exceptions.DomainException;
-import com.schoste.ddd.domain.v2.models.DomainObject;
-import com.schoste.ddd.domain.v2.models.DomainObject.State;
 import com.schoste.ddd.domain.v2.services.GenericRepository;
 import com.schoste.ddd.domain.v2.services.UnitOfWork;
 import com.schoste.ddd.domain.v2.services.UnitOfWorkListener;
@@ -70,7 +70,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 
 			for (Object objToRemove : objectsToRemove)
 			{
-				if (objToRemove instanceof DomainObject) ((DomainObject<?>) objToRemove).setState(State.Detached);
+				if (objToRemove instanceof Entity) ((Entity<?>) objToRemove).setState(State.Detached);
 			}
 
 			this.notifyListenersAfterDelete(objectsToRemove);
@@ -310,7 +310,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 			{
 				for (Object objToRemove : changeLog.getObjectsToRemove())
 				{
-					if (objToRemove instanceof DomainObject) ((DomainObject<?>) objToRemove).setState(State.Detached);
+					if (objToRemove instanceof Entity) ((Entity<?>) objToRemove).setState(State.Detached);
 				}
 
 				detachedObjects.addAll(changeLog.getObjectsToRemove());
@@ -321,7 +321,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 			{
 				for (Object objToAdd : changeLog.getObjectsToAdd())
 				{
-					if (objToAdd instanceof DomainObject) ((DomainObject<?>) objToAdd).setState(State.Detached);
+					if (objToAdd instanceof Entity) ((Entity<?>) objToAdd).setState(State.Detached);
 				}
 
 				detachedObjects.addAll(changeLog.getObjectsToAdd());
