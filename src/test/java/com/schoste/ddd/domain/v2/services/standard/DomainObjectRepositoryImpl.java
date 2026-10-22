@@ -9,11 +9,9 @@ import org.springframework.context.ApplicationContext;
 
 import com.schoste.ddd.domain.v2.dal.models.ExampleDO;
 import com.schoste.ddd.domain.v2.dal.services.ExampleDAO;
-import com.schoste.ddd.domain.v2.exceptions.DomainException;
 import com.schoste.ddd.domain.v2.models.ExampleDomainObject;
 import com.schoste.ddd.domain.v2.services.AutoObjectConverter;
 import com.schoste.ddd.domain.v2.services.GenericEntityLoader;
-import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALException;
 
 /**
  * Example implementation of the DomainObjectRepository interface

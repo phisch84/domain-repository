@@ -3,6 +3,7 @@ package com.schoste.ddd.domain.v2.entities;
 import java.io.Serializable;
 
 import com.schoste.ddd.domain.v2.services.GenericRepository;
+import com.schoste.ddd.domain.v2.services.UnitOfWork;
 import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
@@ -24,19 +25,18 @@ public interface Entity<ID extends Serializable>
 	public enum State
 	{
 		/**
-		 * The entity has equal values with its corresponding Data Object
+		 * The entity is registered in the repository (its id is known to the repository) and its values are equal to those of its corresponding Data Object
 		 */
 		Unchanged(0),
 		
 		/**
-		 * The entity was not yet persisted
+		 * The entity has not been persisted yet, but is supposed to be persisted by the next call to {@link UnitOfWork#commit()}
 		 */
 		Added(1),
 		
 		/**
-		 * The entity was persisted but needs to be committed to the DAL
-		 * because its values were changed (do not match the values of the corresponding
-		 * Data Object)
+		 * The entity is registered in the repository (its id is known to the repository) and was persisted, but needs to be committed to the DAL
+		 * because its values were changed (they do not match the values of the corresponding Data Object)
 		 */
 		Modified(2),
 		
@@ -46,7 +46,7 @@ public interface Entity<ID extends Serializable>
 		Deleted(3),
 		
 		/**
-		 * The entity doesn't exist in the repositiry (yet) and should not be regarded for DAL operations
+		 * The entity doesn't exist in the repository and should not be regarded for DAL operations
 		 */
 		Detached(4);
 
@@ -72,7 +72,7 @@ public interface Entity<ID extends Serializable>
 	 * Gets the unique ID of the entity.
 	 * Entities of a repository must have a unique Identifier.
 	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity(Object...)})
-	 * until they are persisted. Once they have been persited, their ID is updated with the ID from their data object.
+	 * until they are persisted. Once they have been persisted, their ID is updated with the ID of their data object.
 	 *
 	 * @return the unique ID of the entity.
 	 */
@@ -82,7 +82,7 @@ public interface Entity<ID extends Serializable>
 	 * Sets the unique ID of the entity.
 	 * Entities of a repository must have a unique Identifier.
 	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity(Object...)})
-	 * until they are persisted. Once they have been persited, their ID is updated with the ID from their data object.
+	 * until they are persisted. Once they have been persisted, their ID is updated with the ID of their data object.
 	 *
 	 * @param ID the unique ID of the entity.
 	 */

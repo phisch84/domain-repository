@@ -14,7 +14,7 @@ public interface UnitOfWork extends RepositoryChangeListener
 	/**
 	 * Persists all changes to the underlying data source
 	 * 
-	 * @throws IllegalStateException thrown if an object in a repository does not implement the DomainObject interface
+	 * @throws IllegalStateException thrown if an object in a repository does not implement the {@link com.schoste.ddd.domain.v2.entities.Entity} interface
 	 * 
 	 * @throws DALException re-throws exceptions from the data access layer
 	 * @throws DomainException re-throws all exceptions as {@link DomainException}

@@ -15,7 +15,7 @@ import com.schoste.ddd.domain.v2.services.GenericEntityLoader;
 import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
- * Standart implementation of the {@link GenericEntityLoader} interface.
+ * Standard implementation of the {@link GenericEntityLoader} interface.
  *
  * @param <ID> the data type of the unique identifier of the {@link Entity} and its corresponding {@link GenericDataObject}
  * @param <DO> the data type of data objects loaded from the underlying DAO
