@@ -19,7 +19,7 @@ import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
  *
  * @param <ID> the data type of the unique identifier of the {@link Entity} and its corresponding {@link GenericDataObject}
  * @param <DO> the data type of data objects loaded from the underlying DAO
- * @param <E> the actual data type of the domain objects that are lazily loaded
+ * @param <E> the actual data type of the entities that are loaded
  */
 public class GenericEntityLoaderImpl<ID extends Serializable, DO extends GenericDataObject<ID>, E extends Entity<ID>> implements GenericEntityLoader<ID, DO, E>
 {
@@ -31,9 +31,10 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends Generic
     /**
      * Creates a new instance
      * 
-     * @param dataObjToDomainObjFunction a function that will convert a data object from the data object stream into a domain object
-     * @param dataObjStream a stream (usually to a DAO) that provides the data objects of the domain objects
-     * @throws IllegalArgumentException thrown if either dataObjToDomainObjFunction or dataObjStream is null
+     * @param cachedEntities the entities which are already loaded and cached by the repository. They take precedence over data objects with the same id from the data object stream.
+     * @param dataObjStream a stream (usually to a DAO) that provides the data objects of the entities
+     * @param dataObjToDomainObjFunction a function that will convert a data object from the data object stream into an entity
+     * @throws IllegalArgumentException thrown if cachedEntities, dataObjStream or dataObjToDomainObjFunction is null
      */
     public GenericEntityLoaderImpl(Collection<E> cachedEntities, Stream<DO> dataObjStream, Function<DO, E> dataObjToDomainObjFunction) throws IllegalArgumentException
     {

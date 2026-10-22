@@ -39,8 +39,11 @@ public interface RepositoryChangeListener extends Closeable
 	void onObjectModified(GenericRepository<?,?,?> repository, Object obj) throws DomainException;
 	
 	/**
-	 * Called before the repository is reloaded
-	 * 
+	 * Called before the repository is reloaded.
+	 * Currently, {@link com.schoste.ddd.domain.v2.services.standard.GenericRepositoryImpl} doesn't call this method,
+	 * since it doesn't provide a reload functionality. The hook is kept for a future reload based on
+	 * {@link com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject#getRecent()}.
+	 *
 	 * @param repository the repository for which to reset the change logs
 	 * @throws DomainException re-throws all exceptions as {@link DomainException}
 	 */

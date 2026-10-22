@@ -89,7 +89,12 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 	/**
 	 * Creates a new, unique virtual identifier for an entity (see {@link Entity#getId()}) which also identifies it
-	 * as not (yet) persisted
+	 * as not (yet) persisted.
+	 *
+	 * The returned identifier must be recognized as virtual by both {@link GenericRepositoryImpl#isVirtualId(Serializable)}
+	 * and {@link GenericDataAccessObject#isVirtualId(Serializable)} of the repository's DAO:
+	 * {@link GenericRepositoryImpl#domainObjectToDataObject(Entity)} sets the entity's virtual id on a new data object,
+	 * and the DAO is supposed to treat it as a new data object when it is saved.
 	 *
 	 * @return a new, unique virtual identifier
 	 */
@@ -144,19 +149,30 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	abstract protected void afterAutoConversation(E entity, DO dataObject) throws Exception;
 
 	/**
-	 * Returns an iterable object that will poll the next available data object from the data source
-	 * 
+	 * Creates an entity loader ({@link GenericEntityLoader}) from implementation-specific arguments.
+	 * It is not used by this class; the get-methods use {@link GenericRepositoryImpl#createEntityLoader(Collection, Stream)}.
+	 *
 	 * To be implemented by the extending class.
-	 * 
-	 * @param <ID> the class of the data object's and entity's unique identifier
-	 * @param <DO> the class of the data object to load
-	 * @param <E> the class of the entity to load
+	 *
 	 * @param args optional arguments for the creation of the entity loader. Their usage depends on the actual implementation
-	 * @return an iterable object that will poll the next available data object from the data source
+	 * @return a new entity loader
 	 * @throws Exception re-throws every exception
 	 */
 	abstract protected GenericEntityLoader<ID, DO, E> createEntityLoader(Object... args) throws Exception;
 
+	/**
+	 * Creates the entity loader ({@link GenericEntityLoader}) which provides the entities of the streams returned by
+	 * {@link GenericRepositoryImpl#get(Serializable[])}, {@link GenericRepositoryImpl#get(Collection)} and
+	 * {@link GenericRepositoryImpl#getAll(boolean)}.
+	 * The returned loader must fulfill the contract of {@link GenericEntityLoader}.
+	 *
+	 * To be implemented by the extending class.
+	 *
+	 * @param cachedEntities the entities which are already loaded and cached by the repository. They are provided as they are and take precedence over data objects with the same id.
+	 * @param dataObjStream the stream of data objects from the repository's DAO, which are converted into entities
+	 * @return a new entity loader
+	 * @throws Exception re-throws every exception
+	 */
 	abstract protected GenericEntityLoader<ID, DO, E> createEntityLoader(Collection<E> cachedEntities, Stream<DO> dataObjStream) throws Exception;
 
 	/**
@@ -191,12 +207,13 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	}
 
 	/**
-	 * Checks if an entity, passed in as an {@link Object} can be considered persisted by checking if its
-	 * id is virtual
-	 * 
+	 * Checks if an entity, passed in as an {@link Object}, can be considered persisted by checking if its
+	 * id is virtual (see {@link GenericRepositoryImpl#isVirtualId(Serializable)}).
+	 *
 	 * @param obj the entity passed in as {@link Object}
-	 * @return false it its id is virtual, true otherwise
+	 * @return false if its id is virtual, true otherwise
 	 * @throws IllegalArgumentException thrown if parameter obj is either null or not an {@link Entity}
+	 * @throws ClassCastException thrown if obj is an {@link Entity} whose id isn't of the repository's id type
 	 * @throws Exception re-throws every exception
 	 */
 	@SuppressWarnings("unchecked")
