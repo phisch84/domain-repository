@@ -365,17 +365,17 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 			// The object was not loaded yet or was removed from cache; reload it
 			DO dataObject = this.getDataAccessObject().get(id);
+
+			if (dataObject == null) return null; // not found in DAO
+			if (dataObject.getIsDeleted()) return null; // found in DAO but flagged deleted
+
+			// An object with the given id exists in the DAL; load it
+			entity = this.createEntity();
+			entity = this.dataObjectToDomainObject(dataObject, entity);
 			
-			if (dataObject != null)
-			{
-				// An object with the given id exists in the DAL; load it
-				entity = this.createEntity();
-				entity = this.dataObjectToDomainObject(dataObject, entity);
-				
-				WeakReference<E> refToDomainObject = new WeakReference<E>(entity);
-				
-				this.loadedEntities.put(entity.getId(), refToDomainObject);
-			}
+			WeakReference<E> refToDomainObject = new WeakReference<E>(entity);
+			
+			this.loadedEntities.put(entity.getId(), refToDomainObject);
 		}
 		
 		return entity;
@@ -421,7 +421,6 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 			@SuppressWarnings("unchecked")
 			E obj = (E) this.doCreateEntity(this.getDomainObjectClass(), args);
 
-			// the DAO assigns a new virtual id to every data object it creates
 			obj.setId(this.getNextVirtualId());
 			obj.setState(State.Detached);
 			
@@ -614,9 +613,10 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	@Override
 	public synchronized void add(E entity) throws IllegalArgumentException, IllegalStateException, DomainException
 	{
+		if (entity == null) throw new IllegalArgumentException("entity");
+
 		try
 		{
-			if (entity == null) throw new IllegalArgumentException("entity");
 			if (this.loadedEntities.containsKey(entity.getId()))
 			{
 				WeakReference<E> cachedEntityRef = this.loadedEntities.get(entity.getId());
@@ -640,6 +640,14 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 			entity.setState(State.Added);
 			
 			this.notifyObjectAdded(entity);
+		}
+		catch (IllegalArgumentException e)
+		{
+			throw e;
+		}
+		catch (IllegalStateException e)
+		{
+			throw e;
 		}
 		catch (Exception e)
 		{

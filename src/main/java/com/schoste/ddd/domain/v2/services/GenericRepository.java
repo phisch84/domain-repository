@@ -146,6 +146,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * The state of the entity is set to Added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added),
 	 * the entity is added to the repository's internal cache, and {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)}
 	 * is called for the repository's listeners.
+	 * If an entity with the same id already exists in the repository's cache, but is a different instance than the provided id, then an exception is thrown.
 	 * If an entity with the same id already exists in the repository's cache, then this method does nothing - regardless of the state of the provided entity.
 	 * If the entity doesn't exist in the repository's cache yet and the state of the provided entity is anything other than Detached or Added, an exception is thrown.
 	 * The actual persistence of the entity is done by the Unit of Work ({@link UnitOfWork}) when
@@ -163,6 +164,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * The state of the entity is set to Added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added),
 	 * the entity is added to the repository's internal cache, and {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)}
 	 * is called for the repository's listeners.
+	 * If an entity with the same id already exists in the repository's cache, but is a different instance than the provided id, then an exception is thrown.
 	 * If an entity with the same id already exists in the repository's cache, then this method does nothing - regardless of the state of the provided entity.
 	 * If the entity doesn't exist in the repository's cache yet and the state of the provided entity is anything other than Detached or Added, an exception is thrown.
 	 * The actual persistence of the entity is done by the Unit of Work ({@link UnitOfWork}) when
@@ -192,13 +194,15 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	public void remove(E entity) throws DomainException;
 	
 	/**
-	 * Flags an entity for removal from the repository:
-	 * The state of the entity is set deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted).
+	 * Flags an entity which is known to the repository (its id exists in the cache) for removal from the repository:
+	 * For entities with the state Unchanged or Modified, the state of the entity is set to Deleted
+	 * ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted).
+	 * For entities with the state Added, the state of the entity is set to Detached.
 	 * The entity is only flagged for removal if there is an entity with the same id in the repository's cache.
 	 * If no entity with the same id exists, this method just sets the entity's state to Detached.
 	 * The actual removal of the entity is done by the Unit of Work ({@link UnitOfWork}) when
      * {@link UnitOfWork#commit()} is called. After this call, the entity is evicted from the repository's cache.
-	 *
+	 * 
 	 * @param entity the entity to remove
 	 * @throws IllegalArgumentException thrown if the parameter entity is null
 	 * @throws DomainException re-throws every exception as {@link DomainException}
@@ -217,7 +221,6 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	
 	/**
 	 * Marks an entity as modified so it will be persisted by the Unit of Work ({@link UnitOfWork}).
-	 * Entities marked as modified will not be overwritten when the repository reloads data objects from the DAO.
 	 * If the entity's state is anything other than Unchanged, the state won't change.
 	 * 
 	 * @param entity the entity to mark as modified
