@@ -2,6 +2,7 @@ package com.schoste.ddd.domain.v2.entities;
 
 import java.io.Serializable;
 
+import com.schoste.ddd.domain.v2.services.GenericRepository;
 import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
@@ -45,7 +46,7 @@ public interface Entity<ID extends Serializable>
 		Deleted(3),
 		
 		/**
-		 * The entity should not be regarded for DAL operations
+		 * The entity doesn't exist in the repositiry (yet) and should not be regarded for DAL operations
 		 */
 		Detached(4);
 
@@ -55,7 +56,12 @@ public interface Entity<ID extends Serializable>
 		{
 			this.value = value;
 		}
-		
+
+		/**
+		 * Gets the integer value of the {@link State}
+		 * 
+		 * @return the integer value of the {@link State}
+		 */
 		int getValue()
 		{
 			return this.value;
@@ -64,10 +70,9 @@ public interface Entity<ID extends Serializable>
 	
 	/**
 	 * Gets the unique ID of the entity.
-	 * Domain objects of a certain repository must have a unique Identifier.
-	 * Domain objects created by a repository get a virtual ID from the repository's data access object
-	 * until they are persisted (see {@link com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject#isVirtualEID(Serializable)}).
-	 * If the Identifier is null, the entity was not created by a repository.
+	 * Entities of a repository must have a unique Identifier.
+	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity(Object...)})
+	 * until they are persisted. Once they have been persited, their ID is updated with the ID from their data object.
 	 *
 	 * @return the unique ID of the entity.
 	 */
@@ -75,10 +80,9 @@ public interface Entity<ID extends Serializable>
 
 	/**
 	 * Sets the unique ID of the entity.
-	 * Domain objects of a certain repository must have a unique Identifier.
-	 * Domain objects created by a repository get a virtual ID from the repository's data access object
-	 * until they are persisted (see {@link com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject#isVirtualEID(Serializable)}).
-	 * If the Identifier is null, the entity was not created by a repository.
+	 * Entities of a repository must have a unique Identifier.
+	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity(Object...)})
+	 * until they are persisted. Once they have been persited, their ID is updated with the ID from their data object.
 	 *
 	 * @param ID the unique ID of the entity.
 	 */
@@ -93,8 +97,9 @@ public interface Entity<ID extends Serializable>
 	
 	/**
 	 * Sets the entity's state which is evaluated by Units of Work.
-	 * Usually you only need to defined the Modified state manually.
-	 * Other states are supposed to be defined by the corresponding repositories.
+	 * The states are intended to be managed by the entity's repository. See:
+	 * {@link GenericRepository#createEntity(Object...)}, {@link GenericRepository#add(Entity)}, {@link GenericRepository#setModified(Entity)},
+	 * and {@link GenericRepository#remove(Entity)}.
 	 * 
 	 * @param state the entity's state
 	 */

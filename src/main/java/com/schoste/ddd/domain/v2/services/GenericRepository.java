@@ -64,9 +64,6 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * Gets an entity with a given id. If no entity with the given id exists in the repository,
 	 * or if the entity's id exists in the repository, but no actual entity has been loaded,
 	 * then it will try to load it from the underlying DAO.
-	 * If the data object is flagged deleted ({@link GenericDataObject#getIsDeleted()} is true)
-	 * the repository is supposed to set the entity deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted),
-	 * remove the entity from its cache and return null.
 	 * 
 	 * @param id the id of the entity to get
 	 * @return the entity or null if none was found
@@ -88,7 +85,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @param ids the ids of the entities to get
 	 * @return a stream which provides found entities
 	 * 
-	 * @throws IllegalArgumentException thrown if parameter id is null
+	 * @throws IllegalArgumentException thrown if parameter ids is null
 	 * @throws DALException re-throws exceptions from the data access layer
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
@@ -105,7 +102,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @param ids the ids of the entities to get
 	 * @return a stream which provides found entities
 	 * 
-	 * @throws IllegalArgumentException thrown if parameter id is null
+	 * @throws IllegalArgumentException thrown if parameter ids is null
 	 * @throws DALException re-throws exceptions from the data access layer
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
@@ -117,14 +114,23 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * ({@link GenericDataObject#getId()} equals {@link Entity#getId()}) which isn't flagged deleted
 	 * ({@link GenericDataObject#getIsDeleted()} is false).
 	 * 
-	 * If parameter recentOnly is true, then the repository is supposed to call {@link GenericDataAccessObject#getRecent()}.
-	 * If parameter recentOnly is false, then the repository is supposed to call {@link GenericDataAccessObject#getAll()}.
-	 * Add new entities for new data objects into its own cache, and update existing entities with potentially modified data objects.
-	 * For all cached entity ids in the repository's own cache, that haven't been reported by {@link GenericDataAccessObject#getRecent()},
-	 * it is then supposed to call {@link GenericDataAccessObject#get(Serializable[])} and update the entities with the
+	 * The returned entities must contain those entities for which ids exist in its cache and where an entity is already loaded.
+	 * Since these entities are most likely held outside, they must not be changed by a reload.
+	 * 
+	 * For all entity ids in the repository's own cache, where no entity isn't loaded (anymore) that haven't been reported by {@link GenericDataAccessObject#getRecent()},
+	 * it is supposed to call {@link GenericDataAccessObject#get(Serializable[])} and update the entities with the
 	 * data objects returned. If no data object was returned for a given id, or if the data object was flagged deleted,
 	 * the repository is supposed to set the entity deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted),
 	 * remove the entity from its cache and not report it back in the stream.
+	 * 
+	 * In order to get potential new entities from the storage, or to update existing ones that do not exist (their id isn't registered in the repository's cache)
+	 * in the cache (anymore):
+	 * <ul>
+	 * <li>If parameter recentOnly is true, then the repository is supposed to call {@link GenericDataAccessObject#getRecent()};
+	 * thus only new or modified data objects of entities are loaded from the DAO.</li>
+	 * <li>If parameter recentOnly is false, then the repository is supposed to call {@link GenericDataAccessObject#getAll()};
+	 * thus also data objects of entities that haven't been loaded yet (for whatever reason) are loaded.</li>
+	 * </ul>
 	 * 
 	 * @return a stream which provides found entities
 	 * 
@@ -134,44 +140,46 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	public Stream<E> getAll(boolean recentOnly) throws DALException, DomainException;
 
 	/**
-	 * Adds an entity to the repository:
-	 * The state of the entity is set added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added),
-	 * and the entity is added to the repository's internal cache.
-	 * If an entity with the same id already exists, this method does nothing.
+	 * Adds an entity to the repository if its state is either Detached or Added (multiple calls with the same entity have no effect).
+	 * The state of the entity is set to Added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added),
+	 * and the entity is added to the repository's internal cache and for its listeners {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)}
+	 * is called.
+	 * If an entity with the same id already exists in the repository's cache, then this method does nothing - regardless of the state of the provided entity.
+	 * If the entity doesn't exist in the repositories cache yet and state of the provided entity is anything else than Detached or Added an exception is thrown.
 	 * The actual persistence of the entity id done by the Unit of Work ({@link UnitOfWork}) when
      * ({@link UnitOfWork#commit()}) is called. 
 	 * 
 	 * @param entity the entity to add
 	 * @throws IllegalArgumentException thrown if the parameter entity is null
-	 * @throws IllegalStateException thrown if the state of the entity is anything else than Detached or Added
+	 * @throws IllegalStateException thrown if the state of the entity is anything else than Detached or Added and the entity is unknown to the repository.
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public void add(E entity) throws DomainException;
 	
 	/**
-	 * Adds an entity to the repository:
-	 * The state of the entity is set added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added),
-	 * and the entity is added to the repository's internal cache.
-	 * The entity is only added if there is no other entity with the same id.
-	 * If an entity with the same id already exists, this method does nothing.
+	 * Adds an entity to the repository if its state is either Detached or Added (multiple calls with the same entity have no effect).
+	 * The state of the entity is set to Added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added),
+	 * and the entity is added to the repository's internal cache and for its listeners {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)}
+	 * is called.
+	 * If an entity with the same id already exists in the repository's cache, then this method does nothing - regardless of the state of the provided entity.
+	 * If the entity doesn't exist in the repositories cache yet and state of the provided entity is anything else than Detached or Added an exception is thrown.
 	 * The actual persistence of the entity id done by the Unit of Work ({@link UnitOfWork}) when
      * ({@link UnitOfWork#commit()}) is called. 
 	 * 
 	 * @param entity the entity to add
 	 * @throws IllegalArgumentException thrown if the parameter entity is null
-	 * @throws IllegalStateException thrown if the state of the entity is anything else than Detached or Added
+	 * @throws IllegalStateException thrown if the state of the entity is anything else than Detached or Added and the entity is unknown to the repository.
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public void add(Object entity) throws DomainException;
 	
 	/**
-	 * Removes an entity from the repository:
-	 * The state of the entity is set deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted),
-	 * and it is removed from the repository's internal cache.
-	 * The entity is only removed if there is an entity with the same id.
+	 * Flags an entity for removal from the repository:
+	 * The state of the entity is set deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted).
+	 * The entity is only flagged for removal if there is an entity with the same id in the repositories cache.
 	 * If no entity with the same id already exists, this method just sets the entity's state to detached.
 	 * The actual removal of the entity id done by the Unit of Work ({@link UnitOfWork}) when
-     * ({@link UnitOfWork#commit()}) is called. 
+     * ({@link UnitOfWork#commit()}) is called. After this call, the entity is evicted from the repositories cache.
 	 * 
 	 * @param entity the entity to remove
 	 * @throws IllegalArgumentException thrown if the parameter entity is null
@@ -180,13 +188,12 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	public void remove(E entity) throws DomainException;
 	
 	/**
-	 * Removes an entity from the repository:
-	 * The state of the entity is set deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted),
-	 * and it is removed from the repository's internal cache.
-	 * The entity is only removed if there is an entity with the same id.
+	 * Flags an entity for removal from the repository:
+	 * The state of the entity is set deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted).
+	 * The entity is only flagged for removal if there is an entity with the same id in the repositories cache.
 	 * If no entity with the same id already exists, this method just sets the entity's state to detached.
 	 * The actual removal of the entity id done by the Unit of Work ({@link UnitOfWork}) when
-     * ({@link UnitOfWork#commit()}) is called. 
+     * ({@link UnitOfWork#commit()}) is called. After this call, the entity is evicted from the repositories cache.
 	 * 
 	 * @param entity the entity to remove
 	 * @throws IllegalArgumentException thrown if the parameter entity is null
@@ -233,7 +240,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	/**
 	 * Resets the repository by removing all listeners and clearing all loaded objects.
 	 * 
-	 * @throws Exception re-throws every exception
+	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public void reset() throws DomainException;
 }

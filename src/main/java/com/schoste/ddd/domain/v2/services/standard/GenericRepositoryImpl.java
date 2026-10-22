@@ -87,10 +87,31 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 		}
 	}
 
+	/**
+	 * Creates a new, unique virtual identifier for an entity (see {@link Entity#getId()}) which also identifies it
+	 * as not (yet) persisted
+	 * @return a new, unique virtual identifier
+	 */
 	abstract protected ID getNextVirtualId();
 
+	/**
+	 * Returns an instance to the implementation of an {@link AutoObjectConverter} which will be used in
+	 * data object to entity conversion methods (and visa versa)
+	 * 
+	 * @return an instance to the implementation of an {@link AutoObjectConverter}
+	 */
 	abstract protected AutoObjectConverter getAutoObjectConverter();
 
+	/**
+	 * The method which creates the actual instance of a new entity. This instance will then be used by
+	 * {@link GenericRepositoryImpl#createEntity(Object...)}.
+	 * To be implemented by the deriving class.
+	 * 
+	 * @param entityClass the class type of the entity to create
+	 * @param args optional arguments. Their usage depends on the implementation of the method.
+	 * @return a new instance of a repository's entity.
+	 * @throws Exception re-throws every exception
+	 */
 	abstract protected E doCreateEntity(Class<E> entityClass, Object... args) throws Exception;
 
 	/**
