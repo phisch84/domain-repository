@@ -118,7 +118,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @param ids the ids of the entities to get
 	 * @return a stream which provides the found entities
 	 *
-	 * @throws IllegalArgumentException thrown if parameter ids is null
+	 * @throws IllegalArgumentException thrown if parameter ids is null or contains null
 	 * @throws DALException re-throws exceptions from the data access layer which occur before the stream is returned
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
@@ -131,7 +131,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @param ids the ids of the entities to get
 	 * @return a stream which provides the found entities
 	 *
-	 * @throws IllegalArgumentException thrown if parameter ids is null
+	 * @throws IllegalArgumentException thrown if parameter ids is null or contains null
 	 * @throws DALException re-throws exceptions from the data access layer which occur before the stream is returned
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */

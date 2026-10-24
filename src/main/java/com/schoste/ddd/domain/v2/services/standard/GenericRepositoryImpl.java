@@ -632,6 +632,11 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	{
 		if (ids == null) throw new IllegalArgumentException("ids");
 
+		for (ID id : ids)
+		{
+			if (id == null) throw new IllegalArgumentException("ids");
+		}
+
 		Collection<E> cachedEntities = new ArrayList<>(ids.size());
 		Set<ID> missingIds = new HashSet<>(ids.size());
 
@@ -642,7 +647,6 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 				// each id is regarded once, so each entity is provided once
 				for (ID id : new LinkedHashSet<>(ids))
 				{
-					if (id == null) continue;
 					if (this.isPendingRemoval(id)) continue;
 
 					E entity = this.getCachedEntity(id);
@@ -737,24 +741,17 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 		try
 		{
-			if (this.loadedEntities.containsKey(entity.getId()))
-			{
-				WeakReference<E> cachedEntityRef = this.loadedEntities.get(entity.getId());
-				E cachedEntity = (cachedEntityRef == null) ? (E) null : cachedEntityRef.get();
+			E cachedEntity = this.getCachedEntity(entity.getId());
 
-				if (cachedEntity == null)
-				{
-					// the repo knows the id, but the entity was unloaded -> add it back if states are okay
-				}
-				else
-				{
-					if (entity == cachedEntity) return; // the entity's id is already known; do nothing.
-					else throw new IllegalArgumentException("entity");
-				}				
-			}
+			if (cachedEntity == entity) return; // the entity is already known; do nothing.
+			if (cachedEntity != null) throw new IllegalArgumentException("entity"); // a different instance with the same id is known
 
-			if ((entity.getState() != State.Detached) && (entity.getState() != State.Added)) throw new IllegalStateException();
-	
+			// the entity is unknown (its id isn't cached, or its entity was claimed by the garbage collector)
+			if ((entity.getState() != State.Detached) && (entity.getState() != State.Added)) throw new IllegalStateException(String.format("state %s", entity.getState()));
+
+			// an entity with an actual id has been persisted before, e.g. its removal has already been committed
+			if (!this.isVirtualId(entity.getId())) throw new IllegalStateException(String.format("actual id %s", entity.getId()));
+
 			this.loadedEntities.put(entity.getId(), new WeakReference<E>(entity));
 			
 			entity.setState(State.Added);
@@ -779,23 +776,9 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * {@inheritDoc}
 	 */
 	@Override
-	@SuppressWarnings("unchecked")
 	public void add(Object object) throws DomainException
 	{
-		try
-		{
-			E entity = (E) object;
-	
-			this.add(entity);
-		}
-		catch (DomainException e)
-		{
-			throw e;
-		}
-		catch (Exception e)
-		{
-			throw new DomainException(e);
-		}
+		this.add(this.toEntity(object));
 	}
 
 	/**
@@ -804,55 +787,48 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	@Override
 	public synchronized void remove(E entity) throws DomainException
 	{
-		try
-		{
-			if (entity == null) throw new IllegalArgumentException("entity");
-	
-			if (this.loadedEntities.containsKey(entity.getId()))
-			{
-				this.loadedEntities.remove(entity.getId());
-				
-				if (entity.getState() == State.Unchanged) entity.setState(State.Deleted);
-				if (entity.getState() == State.Modified) entity.setState(State.Deleted);
-				if (entity.getState() == State.Added) entity.setState(State.Detached);
+		if (entity == null) throw new IllegalArgumentException("entity");
 
-				if (entity.getState() == State.Deleted) this.pendingRemovals.put(entity.getId(), new WeakReference<E>(entity));
+		// its removal is already pending
+		if (entity.getState() == State.Deleted) return;
 
-				this.notifyObjectRemoved(entity);
-			}
-			else
-			{
-				// The object doesn't exist in the repo anyways, so detach it.
-				entity.setState(State.Detached);
-			}
-		}
-		catch (Exception e)
+		E cachedEntity = this.getCachedEntity(entity.getId());
+
+		// a different instance with the same id is known
+		if ((cachedEntity != null) && (cachedEntity != entity)) throw new IllegalArgumentException("entity");
+
+		if (cachedEntity == null)
 		{
-			throw new DomainException(e);
+			// The entity is unknown to the repository, so detach it.
+			entity.setState(State.Detached);
+
+			return;
 		}
+
+		this.loadedEntities.remove(entity.getId());
+
+		if ((entity.getState() == State.Unchanged) || (entity.getState() == State.Modified))
+		{
+			entity.setState(State.Deleted);
+
+			this.pendingRemovals.put(entity.getId(), new WeakReference<E>(entity));
+		}
+		else
+		{
+			// it hasn't been persisted yet, so nothing has to be removed from the storage
+			entity.setState(State.Detached);
+		}
+
+		this.notifyObjectRemoved(entity);
 	}
-	
+
 	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	@SuppressWarnings("unchecked")
 	public void remove(Object object) throws DomainException
 	{
-		try
-		{
-			E entity = (E) object;
-			
-			this.remove(entity);
-		}
-		catch (DomainException e)
-		{
-			throw e;
-		}
-		catch (Exception e)
-		{
-			throw new DomainException(e);
-		}
+		this.remove(this.toEntity(object));
 	}
 
 	/**
@@ -861,41 +837,86 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	@Override
 	public void setModified(E entity) throws DomainException
 	{
-		try
-		{
-			if (entity == null) throw new IllegalArgumentException("entity");
-			if (entity.getState() != State.Unchanged) return;
-			
-			entity.setState(State.Modified);
-			this.notifyObjectModified(entity);
-		}
-		catch (Exception e)
-		{
-			throw new DomainException(e);
-		}
+		if (entity == null) throw new IllegalArgumentException("entity");
+		if (entity.getState() != State.Unchanged) return;
+		if (this.getCachedEntity(entity.getId()) != entity) throw new IllegalStateException("entity is unknown to the repository");
+
+		entity.setState(State.Modified);
+		this.notifyObjectModified(entity);
 	}
 
 	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	@SuppressWarnings("unchecked")
 	public void setModified(Object object) throws DomainException
 	{
+		this.setModified(this.toEntity(object));
+	}
+
+	/**
+	 * Casts an object, passed to one of the overloads which take an {@link Object}, into an entity of this repository.
+	 *
+	 * @param obj the object to cast
+	 * @return the entity
+	 * @throws IllegalArgumentException thrown if obj is null or not an entity of this repository
+	 * @throws DomainException thrown if the entity class of the repository can't be determined
+	 */
+	@SuppressWarnings("unchecked")
+	protected E toEntity(Object obj) throws IllegalArgumentException, DomainException
+	{
+		if (obj == null) throw new IllegalArgumentException("entity");
+
+		boolean isEntity;
+
 		try
 		{
-			E entity = (E) object;
-			
-			this.setModified(entity);
-		}
-		catch (DomainException e)
-		{
-			throw e;
+			isEntity = this.getDomainObjectClass().isInstance(obj);
 		}
 		catch (Exception e)
 		{
 			throw new DomainException(e);
 		}
+
+		if (!isEntity) throw new IllegalArgumentException("entity");
+
+		return (E) obj;
+	}
+
+	/**
+	 * Forgets an entity: if it is the instance cached for its id, it is evicted from the cache and from the pending removals,
+	 * and its state is set to Detached. The listeners aren't notified.
+	 * Used by {@link GenericRepositoryImpl#reset()} for all entities, and by the Unit of Work's rollback
+	 * ({@link com.schoste.ddd.domain.v2.services.UnitOfWork#rollback()}) for the entities registered with it.
+	 *
+	 * @param entity the entity to forget
+	 * @throws IllegalArgumentException thrown if entity is null
+	 */
+	protected synchronized void forget(E entity) throws IllegalArgumentException
+	{
+		if (entity == null) throw new IllegalArgumentException("entity");
+
+		WeakReference<E> entityRef = this.loadedEntities.get(entity.getId());
+
+		if ((entityRef != null) && (entityRef.get() == entity)) this.loadedEntities.remove(entity.getId());
+
+		entityRef = this.pendingRemovals.get(entity.getId());
+
+		if ((entityRef != null) && (entityRef.get() == entity)) this.pendingRemovals.remove(entity.getId());
+
+		entity.setState(State.Detached);
+	}
+
+	/**
+	 * Forgets an entity passed as {@link Object} (see {@link GenericRepositoryImpl#forget(Entity)}).
+	 *
+	 * @param obj the entity to forget
+	 * @throws IllegalArgumentException thrown if obj is null or not an entity of this repository
+	 * @throws DomainException thrown if the entity class of the repository can't be determined
+	 */
+	protected void forget(Object obj) throws IllegalArgumentException, DomainException
+	{
+		this.forget(this.toEntity(obj));
 	}
 
 	/**
@@ -904,18 +925,23 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	@Override
 	public synchronized void reset() throws DomainException
 	{
-		try
+		synchronized (this.changeListener)
 		{
-			synchronized (this.changeListener)
-			{
-				this.changeListener.clear();
-				this.loadedEntities.clear();
-				this.pendingRemovals.clear();
-			}
+			this.changeListener.clear();
 		}
-		catch (Exception e)
+
+		Collection<WeakReference<E>> entityRefs = new ArrayList<>(this.loadedEntities.values());
+
+		entityRefs.addAll(this.pendingRemovals.values());
+
+		for (WeakReference<E> entityRef : entityRefs)
 		{
-			throw new DomainException(e);
+			E entity = (entityRef == null) ? null : entityRef.get();
+
+			if (entity != null) this.forget(entity);
 		}
+
+		this.loadedEntities.clear();
+		this.pendingRemovals.clear();
 	}
 }

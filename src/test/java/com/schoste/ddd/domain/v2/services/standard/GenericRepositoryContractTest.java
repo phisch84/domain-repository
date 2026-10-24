@@ -193,6 +193,24 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 	}
 
 	/**
+	 * Arranges a different instance with the same id as a known entity (situation "Twin"):
+	 * an entity is loaded, garbage collected and loaded again; the first instance is the twin of the second one.
+	 *
+	 * @return the twin; the known entity can be obtained by {@link GenericRepository#get(Serializable)}
+	 * @throws Exception re-throws every exception
+	 */
+	protected E createTwin() throws Exception
+	{
+		E twin = this.loadEntity();
+
+		this.simulateGc(twin.getId());
+
+		Assert.assertNotSame(twin, this.getRepository().get(twin.getId()));
+
+		return twin;
+	}
+
+	/**
 	 * Simulates that the garbage collector has claimed the entity cached for an id. The id stays cached.
 	 * Instances of the entity held by the test become unknown to the repository (situation "GC").
 	 *
@@ -597,6 +615,39 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 	public void getCollection_null_throwsIllegalArgument() throws Exception
 	{
 		this.getRepository().get((Collection<ID>) null);
+	}
+
+	/**
+	 * S1: null isn't accepted as id, even among other ids; nothing is queried.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void getIds_nullElement_throwsIllegalArgumentWithoutQuery() throws Exception
+	{
+		DO dataObject = this.seedDataObject(false);
+
+		try
+		{
+			this.getRepository().get(this.ids(dataObject.getId(), null));
+
+			Assert.fail();
+		}
+		catch (IllegalArgumentException e)
+		{
+			Assert.assertTrue(this.getQueriedMethods().isEmpty());
+		}
+	}
+
+	/**
+	 * S1: null isn't accepted as id in a collection either.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void getCollection_nullElement_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().get(Arrays.asList(this.seedDataObject(false).getId(), null));
 	}
 
 	/**
@@ -1252,5 +1303,559 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 
 		Assert.assertEquals(1, entities.size());
 		Assert.assertTrue(containsSame(entities, entity));
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+	// add / add(Object)
+	// ---------------------------------------------------------------------------------------------------------------
+
+	/**
+	 * D1: null isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void add_null_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().add((E) null);
+	}
+
+	/**
+	 * D2: a new entity becomes Added and known, and the listeners are notified.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void add_newEntity_becomesAddedKnownAndNotified() throws Exception
+	{
+		E entity = this.getRepository().createEntity();
+
+		this.getRepository().add(entity);
+
+		Assert.assertEquals(Entity.State.Added, entity.getState());
+		Assert.assertSame(entity, this.getRepository().get(entity.getId()));
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getAdded());
+	}
+
+	/**
+	 * D3: adding an added entity again does nothing.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void add_addedEntityAgain_doesNothing() throws Exception
+	{
+		E entity = this.addEntity();
+
+		this.getRepository().add(entity);
+
+		Assert.assertEquals(Entity.State.Added, entity.getState());
+		Assert.assertEquals(1, this.listener.getAdded().size());
+	}
+
+	/**
+	 * D4: adding a known Unchanged entity does nothing.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void add_unchangedEntityAgain_doesNothing() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getRepository().add(entity);
+
+		Assert.assertEquals(Entity.State.Unchanged, entity.getState());
+		Assert.assertTrue(this.listener.isEmpty());
+	}
+
+	/**
+	 * D5: a different instance with the id of a known entity isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void add_twin_throwsIllegalArgument() throws Exception
+	{
+		E twin = this.createTwin();
+
+		try
+		{
+			this.getRepository().add(twin);
+
+			Assert.fail();
+		}
+		catch (IllegalArgumentException e)
+		{
+			Assert.assertTrue(this.listener.isEmpty());
+		}
+	}
+
+	/**
+	 * D6: an added entity whose cached reference has been claimed by the garbage collector is added again (Q1).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void add_garbageCollectedAddedEntity_isAddedAgain() throws Exception
+	{
+		E entity = this.addEntity();
+
+		this.simulateGc(entity.getId());
+		this.getRepository().add(entity);
+
+		Assert.assertEquals(Entity.State.Added, entity.getState());
+		Assert.assertSame(entity, this.getRepository().get(entity.getId()));
+		Assert.assertEquals(2, this.listener.getAdded().size());
+	}
+
+	/**
+	 * D7: an Unchanged entity which has become unknown by garbage collection isn't accepted (Q1).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalStateException.class)
+	public void add_garbageCollectedUnchangedEntity_throwsIllegalState() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.simulateGc(entity.getId());
+		this.getRepository().add(entity);
+	}
+
+	/**
+	 * D8: an unknown entity with the state Unchanged, Modified or Deleted isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void add_unknownEntityWithStateUnchangedModifiedOrDeleted_throwsIllegalState() throws Exception
+	{
+		for (Entity.State state : Arrays.asList(Entity.State.Unchanged, Entity.State.Modified, Entity.State.Deleted))
+		{
+			E entity = this.getRepository().createEntity();
+
+			entity.setState(state);
+
+			try
+			{
+				this.getRepository().add(entity);
+
+				Assert.fail(state.toString());
+			}
+			catch (IllegalStateException e)
+			{
+				Assert.assertEquals(state, entity.getState());
+			}
+		}
+
+		Assert.assertTrue(this.listener.isEmpty());
+	}
+
+	/**
+	 * D9: a Detached entity with an actual id (it has been persisted before) isn't accepted (Q5).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalStateException.class)
+	public void add_detachedEntityWithActualId_throwsIllegalState() throws Exception
+	{
+		E entity = this.getRepository().createEntity();
+
+		entity.setId(this.seedDataObject(false).getId());
+
+		this.getRepository().add(entity);
+	}
+
+	/**
+	 * D10: an entity whose removal is pending isn't accepted (O4).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalStateException.class)
+	public void add_pendingRemoval_throwsIllegalState() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getRepository().remove(entity);
+		this.getRepository().add(entity);
+	}
+
+	/**
+	 * D11: null isn't accepted as {@link Object} either (Q2).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void addObject_null_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().add((Object) null);
+	}
+
+	/**
+	 * D11: an object which isn't an entity of the repository isn't accepted (Q2).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void addObject_wrongType_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().add((Object) "not an entity");
+	}
+
+	/**
+	 * D12: an {@link IllegalStateException} is thrown as it is by the overload which takes an {@link Object} (Q2).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalStateException.class)
+	public void addObject_garbageCollectedUnchangedEntity_throwsIllegalStateUnwrapped() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.simulateGc(entity.getId());
+		this.getRepository().add((Object) entity);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+	// remove / remove(Object)
+	// ---------------------------------------------------------------------------------------------------------------
+
+	/**
+	 * M1: null isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void remove_null_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().remove((E) null);
+	}
+
+	/**
+	 * M2: a known Unchanged entity becomes Deleted, its removal is pending, and the listeners are notified.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void remove_unchangedEntity_becomesDeletedPendingAndNotified() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getRepository().remove(entity);
+
+		Assert.assertEquals(Entity.State.Deleted, entity.getState());
+		Assert.assertNull(this.getRepository().get(entity.getId()));
+		Assert.assertFalse(containsSame(collect(this.getRepository().getAll(false)), entity));
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getRemoved());
+	}
+
+	/**
+	 * M3: a known Modified entity becomes Deleted and its removal is pending.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void remove_modifiedEntity_becomesDeletedAndPending() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getRepository().setModified(entity);
+		this.getRepository().remove(entity);
+
+		Assert.assertEquals(Entity.State.Deleted, entity.getState());
+		Assert.assertNull(this.getRepository().get(entity.getId()));
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getRemoved());
+	}
+
+	/**
+	 * M4: a known Added entity becomes Detached and is evicted; nothing is pending.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void remove_addedEntity_becomesDetachedEvictedAndNotPending() throws Exception
+	{
+		E entity = this.addEntity();
+
+		this.getRepository().remove(entity);
+
+		Assert.assertEquals(Entity.State.Detached, entity.getState());
+		Assert.assertNull(this.getRepository().get(entity.getId()));
+		Assert.assertFalse(this.getRepositoryImpl().isPendingRemoval(entity.getId()));
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getRemoved());
+	}
+
+	/**
+	 * M5: removing a Deleted entity again does nothing (Q6).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void remove_deletedEntity_doesNothing() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getRepository().remove(entity);
+		this.getRepository().remove(entity);
+
+		Assert.assertEquals(Entity.State.Deleted, entity.getState());
+		Assert.assertTrue(this.getRepositoryImpl().isPendingRemoval(entity.getId()));
+		Assert.assertEquals(1, this.listener.getRemoved().size());
+	}
+
+	/**
+	 * M6: a different instance with the id of a known entity isn't accepted; the known entity isn't affected (Q7).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void remove_twin_throwsIllegalArgument() throws Exception
+	{
+		E twin = this.createTwin();
+		E known = this.getRepository().get(twin.getId());
+
+		try
+		{
+			this.getRepository().remove(twin);
+
+			Assert.fail();
+		}
+		catch (IllegalArgumentException e)
+		{
+			Assert.assertEquals(Entity.State.Unchanged, known.getState());
+			Assert.assertSame(known, this.getRepository().get(twin.getId()));
+			Assert.assertTrue(this.listener.getRemoved().isEmpty());
+		}
+	}
+
+	/**
+	 * M7: an unknown entity becomes Detached without notifying the listeners.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void remove_unknownEntity_becomesDetachedWithoutNotification() throws Exception
+	{
+		E entity = this.getRepository().createEntity();
+
+		this.getRepository().remove(entity);
+
+		Assert.assertEquals(Entity.State.Detached, entity.getState());
+		Assert.assertTrue(this.listener.isEmpty());
+	}
+
+	/**
+	 * M8: an Unchanged entity which has become unknown by garbage collection becomes Detached without notifying the listeners;
+	 * nothing is pending, so its data object is loaded again.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void remove_garbageCollectedEntity_becomesDetachedWithoutNotification() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.simulateGc(entity.getId());
+		this.getRepository().remove(entity);
+
+		Assert.assertEquals(Entity.State.Detached, entity.getState());
+		Assert.assertTrue(this.listener.isEmpty());
+		Assert.assertNotNull(this.getRepository().get(entity.getId()));
+	}
+
+	/**
+	 * M9: an object which isn't an entity of the repository isn't accepted (Q2).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void removeObject_wrongType_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().remove((Object) "not an entity");
+	}
+
+	/**
+	 * M10: an {@link IllegalArgumentException} is thrown as it is by the overload which takes an {@link Object} (Q2).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void removeObject_twin_throwsIllegalArgumentUnwrapped() throws Exception
+	{
+		this.getRepository().remove((Object) this.createTwin());
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+	// setModified / setModified(Object)
+	// ---------------------------------------------------------------------------------------------------------------
+
+	/**
+	 * F1: null isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void setModified_null_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().setModified((E) null);
+	}
+
+	/**
+	 * F2: a known Unchanged entity becomes Modified, and the listeners are notified.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void setModified_unchangedEntity_becomesModifiedAndNotified() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getRepository().setModified(entity);
+
+		Assert.assertEquals(Entity.State.Modified, entity.getState());
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getModified());
+	}
+
+	/**
+	 * F3: the state of an Added, Modified, Deleted or new entity doesn't change, and the listeners aren't notified.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void setModified_notUnchangedEntity_keepsStateWithoutNotification() throws Exception
+	{
+		E added = this.addEntity();
+		E modified = this.loadEntity();
+		E deleted = this.loadEntity();
+		E created = this.getRepository().createEntity();
+
+		this.getRepository().setModified(modified);
+		this.getRepository().remove(deleted);
+
+		for (E entity : Arrays.asList(added, modified, deleted, created))
+		{
+			Entity.State state = entity.getState();
+
+			this.getRepository().setModified(entity);
+
+			Assert.assertEquals(state, entity.getState());
+		}
+
+		Assert.assertEquals(Arrays.asList(modified), this.listener.getModified());
+	}
+
+	/**
+	 * F4: an Unchanged entity which is unknown to the repository isn't accepted (Q8).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void setModified_unknownUnchangedEntity_throwsIllegalState() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.simulateGc(entity.getId());
+
+		try
+		{
+			this.getRepository().setModified(entity);
+
+			Assert.fail();
+		}
+		catch (IllegalStateException e)
+		{
+			Assert.assertEquals(Entity.State.Unchanged, entity.getState());
+			Assert.assertTrue(this.listener.isEmpty());
+		}
+	}
+
+	/**
+	 * F5: an object which isn't an entity of the repository isn't accepted (Q2).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void setModifiedObject_wrongType_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().setModified((Object) "not an entity");
+	}
+
+	/**
+	 * F6: an {@link IllegalStateException} is thrown as it is by the overload which takes an {@link Object} (Q2).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalStateException.class)
+	public void setModifiedObject_unknownUnchangedEntity_throwsIllegalStateUnwrapped() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.simulateGc(entity.getId());
+		this.getRepository().setModified((Object) entity);
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+	// reset
+	// ---------------------------------------------------------------------------------------------------------------
+
+	/**
+	 * T1: known entities become Detached and are forgotten; the get-methods load entities from the DAO again (Q16).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void reset_knownEntities_becomeDetachedAndAreLoadedAgain() throws Exception
+	{
+		E added = this.addEntity();
+		E unchanged = this.loadEntity();
+		E modified = this.loadEntity();
+
+		this.getRepository().setModified(modified);
+		this.getRepository().reset();
+
+		for (E entity : Arrays.asList(added, unchanged, modified)) Assert.assertEquals(Entity.State.Detached, entity.getState());
+
+		Assert.assertNull(this.getRepository().get(added.getId()));
+
+		E reloaded = this.getRepository().get(unchanged.getId());
+
+		Assert.assertNotNull(reloaded);
+		Assert.assertNotSame(unchanged, reloaded);
+	}
+
+	/**
+	 * T2: an entity whose removal is pending becomes Detached; the pending removal is forgotten (Q16).
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void reset_pendingRemoval_becomesDetachedAndIsLoadedAgain() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getRepository().remove(entity);
+		this.getRepository().reset();
+
+		Assert.assertEquals(Entity.State.Detached, entity.getState());
+
+		E reloaded = this.getRepository().get(entity.getId());
+
+		Assert.assertNotNull(reloaded);
+		Assert.assertNotSame(entity, reloaded);
+	}
+
+	/**
+	 * T3: the listeners are removed.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void reset_listener_isRemoved() throws Exception
+	{
+		this.getRepository().reset();
+		this.addEntity();
+
+		Assert.assertTrue(this.listener.isEmpty());
 	}
 }
