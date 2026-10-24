@@ -1,6 +1,3 @@
-/**
- * 
- */
 package com.schoste.ddd.domain.v3.annotations;
 
 import static java.lang.annotation.ElementType.METHOD;
@@ -10,40 +7,65 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 /**
- * Defines the method which should be used to get the value which should be set
- * during model conversion. The annotated method (setter method) must accept only
- * one parameter. This one parameter will be obtained by the referred method (getter method).
- * 
- * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
+ * Marks a setter of an entity which the repository calls when it converts a data object into the entity
+ * (see {@link com.schoste.ddd.domain.v3.services.AutoObjectConverter}). The setter must be public and take exactly one parameter;
+ * it gets the value returned by a getter without parameters.
  *
+ * Which getter is called:
+ * <ul>
+ * <li>its name is {@link AutoSet#methodName()}, or, if that isn't defined, the setter's name with "set" replaced by "get"
+ * (e.g. {@code getName()} for {@code setName(String)}). Getters starting with "is" aren't found automatically; name them by
+ * {@link AutoSet#methodName()};</li>
+ * <li>it is called on the data object, unless {@link AutoSet#clazz()} or {@link AutoSet#className()} names another class: then
+ * it is called on an instance of that class (e.g. a class which provides a default value).</li>
+ * </ul>
+ *
+ * This annotation is for entities, i.e. for the direction from data object to entity. For the opposite direction, setters of
+ * data objects are annotated with {@code com.schoste.ddd.infrastructure.dao.v4.annotations.AutoSet} of the {@code dao4} library,
+ * which has the same attributes; it is defined there because data objects belong to the infrastructure layer, which must not
+ * depend on the domain layer.
+ *
+ * Example: the repository sets the entity's name and email from the data object's {@code getName()} and {@code getEmailAddress()}.
+ * <pre>
+ * public class Customer extends BasicEntity&lt;Long&gt;
+ * {
+ *     &#64;AutoSet
+ *     public void setName(String name) { ... }
+ *
+ *     &#64;AutoSet(methodName = "getEmailAddress")
+ *     public void setEmail(String email) { ... }
+ * }
+ * </pre>
+ *
+ * Setters which aren't annotated aren't called by the converter; set their values in
+ * {@code GenericRepositoryImpl.doCompleteEntity(DataObject, Entity)} instead.
+ *
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 @Retention(RUNTIME)
 @Target(METHOD)
 public @interface AutoSet
 {
 	/**
-	 * Gets or sets the class which defines the method to use to get the value.
-	 * If this value is null, the converter will try to find a class named {@see AutoConvert#className()}.
-	 * If neither {@see AutoConvert#clazz()} nor {@see AutoConvert#className()} are defined,
-	 * the converter will search the conversion methods in the instance of the source model.
-	 * 
-	 * @return a class
+	 * Defines the class on whose instance the getter is called, instead of the data object.
+	 * The instance is created by the converter (see {@link com.schoste.ddd.domain.v3.services.standard.AutoObjectConverterImpl}).
+	 *
+	 * @return the class, or {@link Object} if not defined
 	 */
 	Class<?> clazz() default Object.class;
-	
+
 	/**
-	 * Gets or sets the name of the class which defines the method to use to get the value.
-	 * If {@see AutoConvert#clazz()} is not null, this property is ignored.
-	 * 
-	 * @return a full class name (with package name)
+	 * Defines the full name (with package) of the class on whose instance the getter is called, instead of the data object.
+	 * Ignored if {@link AutoSet#clazz()} is defined.
+	 *
+	 * @return the full class name, or an empty string if not defined
 	 */
 	String className() default "";
 
 	/**
-	 * Gets or sets the name of the method to use to get the value (getter method).
-	 * If this property is not defined, the converter will try to guess the conversion method itself.
-	 * 
-	 * @return a method name
+	 * Defines the name of the getter. If it isn't defined, the getter's name is the setter's name with "set" replaced by "get".
+	 *
+	 * @return the getter's name, or an empty string if not defined
 	 */
 	String methodName() default "";
 }

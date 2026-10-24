@@ -12,13 +12,11 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
 import com.schoste.ddd.infrastructure.dao.v4.services.DeletedDataObjects;
 
 /**
- * Generic interface to repositories.
- * 
- * Repositories manage access to entities ({@link Entity}) of an application, in particular
- * creating new entities via {@link GenericRepository#createEntity()}, which is supposed to work like a
- * factory method for each entity, and
- * looking these entities up and returning them via the get-methods of the repository, like {@link GenericRepository#get(Serializable)}.
- * 
+ * A repository manages the entities ({@link Entity}) of one entity class, which are stored as data objects ({@link DataObject})
+ * by a DAO (Data Access Object, see {@link DAO}): it creates new entities ({@link GenericRepository#createEntity()}),
+ * provides existing ones (the get-methods, like {@link GenericRepository#get(Serializable)}), and records which entities are
+ * added, modified or removed. A Unit of Work ({@link UnitOfWork}) writes these changes to the DAO.
+ *
  * An implementation of a repository must guarantee that calls to {@link GenericRepository#get(Collection)},
  * {@link GenericRepository#get(Serializable)} and
  * {@link GenericRepository#getAll(boolean)} will return the same instances of entities in subsequent calls
@@ -95,7 +93,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @return the entity, or null if none was found, the entity's data object is flagged deleted, or the entity's removal is pending
 	 * 
 	 * @throws IllegalArgumentException thrown if parameter id is null
-	 * @throws DAOException re-throws exceptions from the data access layer
+	 * @throws DAOException re-throws exceptions from the DAO
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public E get(ID id) throws IllegalArgumentException, DAOException, DomainException;
@@ -122,7 +120,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @return a stream which provides the found entities
 	 *
 	 * @throws IllegalArgumentException thrown if parameter ids is null or contains null
-	 * @throws DAOException re-throws exceptions from the data access layer which occur before the stream is returned
+	 * @throws DAOException re-throws exceptions from the DAO which occur before the stream is returned
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public Stream<E> get(Collection<ID> ids) throws IllegalArgumentException, DAOException, DomainException;
@@ -172,7 +170,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * if false, all data objects are loaded (see {@link DAO#getAll()})
 	 * @return a stream which provides the found entities
 	 *
-	 * @throws DAOException re-throws exceptions from the data access layer which occur before the stream is returned
+	 * @throws DAOException re-throws exceptions from the DAO which occur before the stream is returned
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public Stream<E> getAll(boolean recentOnly) throws DAOException, DomainException;
@@ -310,7 +308,7 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 *
 	 * @return the affected entities: the refreshed ones, which have the state Unchanged, and the forgotten ones, which have the
 	 * state Detached. The collection is empty if nothing was refreshed; callers which don't need it can ignore it.
-	 * @throws DAOException re-throws exceptions from the data access layer
+	 * @throws DAOException re-throws exceptions from the DAO
 	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public Collection<E> refresh() throws DAOException, DomainException;
@@ -336,22 +334,25 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @throws IllegalArgumentException thrown if the parameter entity is null, or if a different instance with the same id is known to the repository
 	 * @throws IllegalStateException thrown if the entity is unknown to the repository, or if its state isn't Unchanged
 	 * (local changes would be lost; commit or roll them back first)
-	 * @throws DAOException re-throws exceptions from the data access layer
+	 * @throws DAOException re-throws exceptions from the DAO
 	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void refresh(E entity) throws IllegalArgumentException, IllegalStateException, DAOException, DomainException;
 
 	/**
-	 * Adds a listener which will be notified when the repository changes
+	 * Adds a listener which will be notified when the repository changes.
+	 * Units of Work add themselves when they are created.
 	 *
 	 * @param listener the listener to add
+	 * @throws IllegalArgumentException thrown if listener is null
 	 */
-	public void addChangeListener(RepositoryChangeListener listener);
+	public void addChangeListener(RepositoryChangeListener listener) throws IllegalArgumentException;
 
 	/**
 	 * Removes a listener which would otherwise be notified when the repository changes
-	 * 
+	 *
 	 * @param listener the listener to remove
+	 * @throws IllegalArgumentException thrown if listener is null
 	 */
 	public void removeChangeListener(RepositoryChangeListener listener);
 

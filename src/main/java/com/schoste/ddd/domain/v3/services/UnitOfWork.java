@@ -4,25 +4,33 @@ import com.schoste.ddd.domain.v3.exceptions.DomainException;
 import com.schoste.ddd.infrastructure.dao.v4.exceptions.DAOException;
 
 /**
- * Interface to Units of Work (UOWs) which commit changes
- * of several repositories to their underlying data sources.
+ * A Unit of Work writes the changes of entities, which its repositories record, to the storage on {@link UnitOfWork#commit()},
+ * or discards them on {@link UnitOfWork#rollback()}. Repositories never write to the storage themselves.
  *
  * A Unit of Work registers itself as change listener ({@link RepositoryChangeListener}) of its repositories and records
  * every change the repositories report, regardless of who made the change. Therefore, use one Unit of Work per repository
  * at a time: Units of Work registered with the same repository share its changes, i.e. each of them records the same changes,
  * commits them and rolls them back.
  *
+ * {@link java.io.Closeable#close()} rolls back the changes which haven't been committed and unregisters the Unit of Work from its
+ * repositories, so a Unit of Work is best used in a try-with-resources statement.
+ *
  * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public interface UnitOfWork extends RepositoryChangeListener
 {
 	/**
-	 * Persists all changes to the underlying data source
-	 * 
-	 * @throws IllegalStateException thrown if an object in a repository does not implement the {@link com.schoste.ddd.domain.v3.entities.Entity} interface
-	 * 
-	 * @throws DAOException re-throws exceptions from the data access layer
-	 * @throws DomainException re-throws all exceptions as {@link DomainException}
+	 * Writes the recorded changes to the storage through the repositories' DAOs:
+	 * <ul>
+	 * <li>added entities are saved; they get the actual id of their data object and the state Unchanged;</li>
+	 * <li>modified entities are saved; they get the state Unchanged;</li>
+	 * <li>the data objects of removed entities are deleted (see {@code DAO.delete(DataObject)}); the entities get the state Detached.</li>
+	 * </ul>
+	 * The commit isn't atomic: it isn't a transaction across DAOs or repositories. If it fails part-way, the changes written
+	 * so far stay written, and the changes which haven't been written yet stay recorded.
+	 *
+	 * @throws DAOException re-throws exceptions from the DAOs
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void commit() throws DAOException, DomainException;
 	

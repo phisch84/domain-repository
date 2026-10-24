@@ -35,8 +35,27 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
 import com.schoste.ddd.infrastructure.dao.v4.services.DeletedDataObjects;
 
 /**
- * Implementation of the generic repository
- * 
+ * Standard implementation of the {@link GenericRepository}: the base class of repositories.
+ *
+ * An implementing class only has to provide the repository's DAO by {@link GenericRepositoryImpl#getDataAccessObject()}.
+ * It declares the concrete classes as type arguments (e.g. {@code extends GenericRepositoryImpl<Long, Customer, CustomerDO>}),
+ * since the repository determines the entity class from them; an intermediate generic base class must therefore not leave
+ * the type arguments open. Everything else has a default, which an implementing class may override:
+ * <ul>
+ * <li>{@link GenericRepositoryImpl#doCreateEntity(Class, Object...)}: creates entities by their no-argument constructor;</li>
+ * <li>{@link GenericRepositoryImpl#getAutoObjectConverter()}: copies the values of the properties annotated with AutoSet
+ * (see {@link AutoObjectConverterImpl});</li>
+ * <li>{@link GenericRepositoryImpl#doCompleteEntity(DataObject, Entity)} and {@link GenericRepositoryImpl#doCompleteDataObject(Entity, DataObject)}:
+ * copy the values which aren't annotated with AutoSet; do nothing by default;</li>
+ * <li>{@link GenericRepositoryImpl#createEntityLoader(Collection, Stream, Function)}: creates a {@link GenericEntityLoaderImpl}.</li>
+ * </ul>
+ * Entities whose creation needs data get a typed factory method which calls {@link GenericRepositoryImpl#createEntity(Object...)}.
+ *
+ * Virtual ids come from the DAO: a new entity gets the id of a new data object ({@link DAO#createDataObject()}), and
+ * {@link GenericRepositoryImpl#isVirtualId(Serializable)} asks {@link DAO#isVirtualId(Serializable)}.
+ *
+ * Changes are written to the DAO by a Unit of Work ({@link UnitOfWorkImpl}), never by the repository itself.
+ *
  * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  * @param <ID> the data type of the identifiers of the domain models and data objects
@@ -462,7 +481,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 	/**
 	 * Tries to get an entity from the cache.
-	 * If it isn't found in the cache and the id is an actual id, then it is reloaded from the DAL.
+	 * If it isn't found in the cache and the id is an actual id, then it is loaded from the DAO.
 	 * If it isn't found in the cache and the id is a virtual id, then null is returned.
 	 * 
 	 * @param id the id of the entity to get/load
@@ -487,7 +506,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 		if (dataObject == null) return null; // not found in DAO
 		if (dataObject.isDeleted()) return null; // found in DAO but flagged deleted
 
-		// An object with the given id exists in the DAL; load it
+		// An object with the given id exists in the DAO; load it
 		return this.createCachedEntity(dataObject);
 	}
 
@@ -582,7 +601,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 *
 	 * @param missingIds the ids to request if they aren't reported by {@link DAO#getModifiedSince(long)}
 	 * @return the stream of data objects
-	 * @throws DAOException re-throws exceptions from the data access layer
+	 * @throws DAOException re-throws exceptions from the DAO
 	 */
 	protected Stream<DO> streamRecentDataObjects(Set<ID> missingIds) throws DAOException
 	{
@@ -667,23 +686,27 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void addChangeListener(RepositoryChangeListener listener)
+	public void addChangeListener(RepositoryChangeListener listener) throws IllegalArgumentException
 	{
+		if (listener == null) throw new IllegalArgumentException("listener");
+
 		synchronized (this.changeListener)
 		{
-			if (listener != null) this.changeListener.add(listener);
+			this.changeListener.add(listener);
 		}
 	}
-	
+
 	/**
 	 * {@inheritDoc}
 	 */
 	@Override
-	public void removeChangeListener(RepositoryChangeListener listener)
+	public void removeChangeListener(RepositoryChangeListener listener) throws IllegalArgumentException
 	{
+		if (listener == null) throw new IllegalArgumentException("listener");
+
 		synchronized (this.changeListener)
 		{
-			if (listener != null) this.changeListener.remove(listener);
+			this.changeListener.remove(listener);
 		}
 	}
 	

@@ -18,7 +18,7 @@ import com.schoste.ddd.infrastructure.dao.v4.models.DataObject;
 public interface Entity<ID extends Serializable>
 {
 	/**
-	 * States of the entity with regards to DAL operations
+	 * The states of an entity, which tell the Unit of Work what to do with it on commit
 	 * 
 	 * @author Philipp Schosteritsch
 	 */
@@ -35,18 +35,18 @@ public interface Entity<ID extends Serializable>
 		Added(1),
 		
 		/**
-		 * The entity is registered in the repository (its id is known to the repository) and was persisted, but needs to be committed to the DAL
+		 * The entity is registered in the repository (its id is known to the repository) and was persisted, but needs to be saved by the next {@link UnitOfWork#commit()}
 		 * because its values were changed (they do not match the values of the corresponding Data Object)
 		 */
 		Modified(2),
 		
 		/**
-		 * The entity should be deleted from the DAL
+		 * The entity was removed from the repository; its data object is deleted by the next {@link UnitOfWork#commit()}
 		 */
 		Deleted(3),
 		
 		/**
-		 * The entity doesn't exist in the repository and should not be regarded for DAL operations
+		 * The entity isn't managed by the repository: it hasn't been added yet, it was removed before it was persisted, its removal was committed, or the repository forgot it (e.g. by {@link UnitOfWork#rollback()} or {@link GenericRepository#reset()})
 		 */
 		Detached(4);
 

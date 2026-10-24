@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><title>Domain Repository 3</title></head>
+<body>
+<p>Domain Repository 3: repositories which create, provide and track the entities of an application, and Units of Work which
+write their changes to a storage. The storage is accessed through a DAO (Data Access Object) of the {@code dao4} library,
+which stores each entity as a data object.</p>
+
+<h1>Where to start</h1>
+<ul>
+<li><b>Using a repository:</b> {@link com.schoste.ddd.domain.v3.services.GenericRepository}. Its class documentation
+lists the rules which hold for every repository: the cache of entity instances, pending removals, refreshing, and exceptions.</li>
+<li><b>Committing changes:</b> {@link com.schoste.ddd.domain.v3.services.UnitOfWork} and its implementation
+{@link com.schoste.ddd.domain.v3.services.standard.UnitOfWorkImpl}.</li>
+<li><b>Writing entities:</b> {@link com.schoste.ddd.domain.v3.entities.BasicEntity}, the states in
+{@link com.schoste.ddd.domain.v3.entities.Entity.State}, and {@link com.schoste.ddd.domain.v3.annotations.AutoSet}
+for the properties which the repository sets from data objects.</li>
+<li><b>Writing a repository:</b> {@link com.schoste.ddd.domain.v3.services.standard.GenericRepositoryImpl}. An implementation
+only provides its DAO; everything else has a default which can be overridden (e.g. to use Spring).</li>
+<li><b>Exceptions:</b> {@link com.schoste.ddd.domain.v3.exceptions}.</li>
+</ul>
+
+<h1>Rules in brief</h1>
+<ul>
+<li>Repositories never write to the storage; a Unit of Work writes the recorded changes on commit. A commit isn't a transaction.</li>
+<li>The state of an entity tells what happens on commit: Detached, Added, Unchanged, Modified, Deleted.</li>
+<li>As long as an entity is referenced, the repository provides the same instance; the cache takes precedence over the storage.</li>
+<li>Entities are only equal to themselves; compare them by id with
+{@link com.schoste.ddd.domain.v3.entities.Entity#isSameEntityAs(com.schoste.ddd.domain.v3.entities.Entity)}.</li>
+<li>An entity whose data object is flagged deleted or missing isn't provided.</li>
+<li>Streams returned by repositories are lazy and must be closed.</li>
+<li>Closing a Unit of Work rolls back what hasn't been committed.</li>
+<li>Null arguments are rejected with {@link java.lang.IllegalArgumentException}.</li>
+</ul>
+
+<h1>Example</h1>
+<p>A repository for the entity {@code Customer}, whose data object {@code CustomerDO} is stored by a DAO of the {@code dao4}
+library, and its use. Spring isn't needed; all objects are created with {@code new}.</p>
+<pre>
+public class Customer extends BasicEntity&lt;Long&gt;
+{
+    private String name;
+
+    public String getName() { return this.name; }
+
+    &#64;AutoSet   // set from CustomerDO.getName()
+    public void setName(String name) { this.name = name; }
+}
+
+public class CustomerRepository extends GenericRepositoryImpl&lt;Long, Customer, CustomerDO&gt;
+{
+    private final DAO&lt;Long, CustomerDO&gt; dao;
+
+    public CustomerRepository(DAO&lt;Long, CustomerDO&gt; dao) { this.dao = dao; }
+
+    protected DAO&lt;Long, CustomerDO&gt; getDataAccessObject() { return this.dao; }
+}
+
+CustomerRepository customers = new CustomerRepository(customerDAO);
+
+try (UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(customers))
+{
+    Customer customer = customers.createEntity();   // Detached, virtual id
+    customer.setName("Example Ltd.");
+
+    customers.add(customer);                         // Added
+    unitOfWork.commit();                             // saved: actual id, Unchanged
+}
+
+try (Stream&lt;Customer&gt; all = customers.getAll(false))
+{
+    all.forEach(c -&gt; System.out.println(c.getName()));
+}
+</pre>
+</body>
+</html>

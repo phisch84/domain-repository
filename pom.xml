@@ -38,6 +38,8 @@
             <groupId>com.schoste.ddd.infrastructure</groupId>
             <artifactId>dao4-fs-serialization</artifactId>
             <version>${ddd.dao-fs.version}</version>
+            <!-- only the integration tests store data objects in files; consumers choose their own storage -->
+            <scope>test</scope>
         </dependency>
 
         <dependency>

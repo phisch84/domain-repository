@@ -23,8 +23,23 @@ import com.schoste.ddd.infrastructure.dao.v4.models.DataObject;
 import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
 
 /**
- * Implementation of the UOW interface
- * 
+ * Standard implementation of the {@link UnitOfWork} for repositories which extend {@link GenericRepositoryImpl}.
+ *
+ * On {@link UnitOfWorkImpl#commit()}, the repositories are processed in the order passed to the constructor. For each repository,
+ * the Unit of Work first deletes the data objects of the removed entities, then saves the added entities, then the modified ones,
+ * each by one call of the repository's DAO. The listeners ({@link UnitOfWorkListener}) are notified after each of these steps.
+ * Exceptions thrown by listeners are printed to {@code System.err} and don't stop the commit.
+ *
+ * {@link UnitOfWorkImpl#close()} rolls back the changes which haven't been committed and unregisters the Unit of Work from its
+ * repositories. Use it with a try-with-resources statement:
+ * <pre>
+ * try (UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(customerRepository))
+ * {
+ *     customerRepository.add(customer);
+ *     unitOfWork.commit();
+ * }
+ * </pre>
+ *
  * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public class UnitOfWorkImpl implements UnitOfWork
@@ -170,24 +185,27 @@ public class UnitOfWorkImpl implements UnitOfWork
 	}
 
 	/**
-	 * Creates a new instance of the Unit of Work (UoW) for a given repository.
-	 * 
-	 * @param repository the repository the UoW is created for.
+	 * Creates a new Unit of Work for a repository and registers it as the repository's change listener.
+	 *
+	 * @param repository the repository whose changes the Unit of Work records
+	 * @throws IllegalArgumentException thrown if repository is null
 	 */
-	public UnitOfWorkImpl(GenericRepositoryImpl<?,?,?> repository)
+	public UnitOfWorkImpl(GenericRepositoryImpl<?,?,?> repository) throws IllegalArgumentException
 	{
 		this(Arrays.asList(new GenericRepositoryImpl<?,?,?>[] { repository }));
 	}
-	
+
 	/**
-	 * Creates a new instance of the Unit of Work (UoW) for given repositories.
-	 * 
-	 * @param repositories the repositories the UoW is created for. Pass the repositories in the order in which they should be committed / rolled back
+	 * Creates a new Unit of Work for several repositories and registers it as their change listener.
+	 *
+	 * @param repositories the repositories whose changes the Unit of Work records, in the order in which they are committed and rolled back
+	 * @throws IllegalArgumentException thrown if repositories is null or contains null
 	 */
-	public UnitOfWorkImpl(List<GenericRepositoryImpl<?,?,?>> repositories)
+	public UnitOfWorkImpl(List<GenericRepositoryImpl<?,?,?>> repositories) throws IllegalArgumentException
 	{
-		if (repositories == null) return;
-		
+		if (repositories == null) throw new IllegalArgumentException("repositories");
+		if (repositories.contains(null)) throw new IllegalArgumentException("repositories");
+
 		// LinkedHashMap is used here to ensure the sort order when enumerating repositories
 		this.changeLogs = new LinkedHashMap<GenericRepositoryImpl<?,?,?>, RepositoryChangeLog>(repositories.size());
 		

@@ -216,6 +216,42 @@ public class PlainJavaRepositoryTest
 	}
 
 	/**
+	 * P9: a Unit of Work doesn't accept null as list of repositories.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void unitOfWork_nullRepositories_throwsIllegalArgumentException()
+	{
+		new UnitOfWorkImpl((List<GenericRepositoryImpl<?,?,?>>) null);
+	}
+
+	/**
+	 * P10: a Unit of Work doesn't accept null as repository.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void unitOfWork_nullRepository_throwsIllegalArgumentException()
+	{
+		new UnitOfWorkImpl((GenericRepositoryImpl<?,?,?>) null);
+	}
+
+	/**
+	 * P11: null isn't accepted as listener to add.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void addChangeListener_null_throwsIllegalArgumentException()
+	{
+		this.repository.addChangeListener(null);
+	}
+
+	/**
+	 * P12: null isn't accepted as listener to remove.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void removeChangeListener_null_throwsIllegalArgumentException()
+	{
+		this.repository.removeChangeListener(null);
+	}
+
+	/**
 	 * P8: the default entity creation doesn't accept arguments, since it uses the no-argument constructor.
 	 *
 	 * @throws Exception re-throws every exception
