@@ -7,7 +7,7 @@ import java.util.Set;
 /**
  * Implementation of the change log used by the Unit of Work (UoW)
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 class RepositoryChangeLog implements Serializable

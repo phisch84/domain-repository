@@ -13,7 +13,7 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
  * Unit of Work tests for the DomainObjectRepository.
  * Extending classes provide the configuration (i.e. the DAO) to run them on.
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public abstract class DomainObjectUnitOfWorkTestSuite extends GenericUnitOfWorkTest<Long, ExampleDomainObject, ExampleDO, DomainObjectRepository>

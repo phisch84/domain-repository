@@ -10,7 +10,7 @@ import com.schoste.ddd.domain.v3.services.standard.AutoObjectConverterImpl;
  * Extension of the {@see AutoObjectConverterImpl} class which uses Spring to instantiate
  * objects.
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class SpringAutoObjectConverterImpl extends AutoObjectConverterImpl implements AutoObjectConverter

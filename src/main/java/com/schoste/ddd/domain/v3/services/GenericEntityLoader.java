@@ -7,8 +7,7 @@ import com.schoste.ddd.domain.v3.entities.Entity;
 import com.schoste.ddd.infrastructure.dao.v4.models.DataObject;
 
 /**
- * Interface to the implementation of an entity loader which is used in {@link GenericRepository#get(Serializable[])},
- * {@link GenericRepository#get(java.util.Collection)} and {@link GenericRepository#getAll(boolean)}.
+ * Interface to the implementation of an entity loader which is used in {@link GenericRepository#get(java.util.Collection)} and {@link GenericRepository#getAll(boolean)}.
  *
  * An entity loader is the {@link Spliterator} behind the stream returned by these methods. It combines two sources:
  * <ol>

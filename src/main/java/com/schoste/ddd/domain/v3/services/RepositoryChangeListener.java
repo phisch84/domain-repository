@@ -8,7 +8,7 @@ import com.schoste.ddd.domain.v3.exceptions.DomainException;
 /**
  * Interface to listeners which handle change notifications from repository
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public interface RepositoryChangeListener extends Closeable
 {

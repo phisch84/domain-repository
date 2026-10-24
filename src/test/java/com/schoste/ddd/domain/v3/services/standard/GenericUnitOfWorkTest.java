@@ -25,7 +25,7 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
  * They only use the public interfaces, so they run on every DAO implementation.
  * The Javadoc of each test names its id in the test grid.
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  * @param <ID> the data type of the identifiers of the entities and data objects
  * @param <E> the entity class

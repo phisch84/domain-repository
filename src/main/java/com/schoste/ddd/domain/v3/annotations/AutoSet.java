@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
  * during model conversion. The annotated method (setter method) must accept only
  * one parameter. This one parameter will be obtained by the referred method (getter method).
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 @Retention(RUNTIME)

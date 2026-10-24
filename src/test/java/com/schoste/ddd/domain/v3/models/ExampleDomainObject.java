@@ -7,7 +7,7 @@ import com.schoste.ddd.domain.v3.entities.Entity;
 /**
  * Example implementation of the domain object interface
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class ExampleDomainObject extends BasicEntity<Long> implements Entity<Long>

@@ -1,20 +1,29 @@
 package com.schoste.ddd.domain.v3.services.standard;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.schoste.ddd.domain.v3.exceptions.DomainException;
 import com.schoste.ddd.domain.v3.exceptions.InvocationException;
 import com.schoste.ddd.domain.v3.services.AutoObjectConverter;
 
 /**
- * Implementation of the version 1 auto object converter
- * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * Standard implementation of the {@link AutoObjectConverter}, used by default by {@link GenericRepositoryImpl}.
+ * It is thread-safe and ready to use without Spring.
+ *
+ * If an AutoSet annotation names a class ({@code clazz} or {@code className}), the converter calls the getter on an instance of
+ * that class instead of the source object. The instance is created once per annotated setter by
+ * {@link AutoObjectConverterImpl#getInstance(Class)} or {@link AutoObjectConverterImpl#getInstance(String)}, which use the
+ * class's no-argument constructor by default. Override both methods to get the instances elsewhere, e.g. from Spring.
+ *
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
-abstract public class AutoObjectConverterImpl implements AutoObjectConverter
+public class AutoObjectConverterImpl implements AutoObjectConverter
 {
 	private class Getter
 	{
@@ -60,36 +69,55 @@ abstract public class AutoObjectConverterImpl implements AutoObjectConverter
 		}
 	}
 
-	protected Map<Class<?>, Map<Method, Getter>> conversionMethodMap = new HashMap<>();
+	/**
+	 * The setters and their getters per pair of source and destination class ({@code Arrays.asList(srcClass, dstClass)})
+	 */
+	private final Map<List<Class<?>>, Map<Method, Getter>> conversionMethodMap = new ConcurrentHashMap<>();
 
 	/**
-	 * Gets the instance to an object for the given class
-	 * 
+	 * Creates a new converter
+	 */
+	public AutoObjectConverterImpl()
+	{
+	}
+
+	/**
+	 * Gets the instance of a class named by {@code AutoSet.clazz()}, on which the getter is called.
+	 * By default, the instance is created by the class's no-argument constructor.
+	 *
 	 * @param clazz the class to get the instance for
-	 * @return an instance to an object of the given class
+	 * @return an instance of the given class
 	 * @throws Exception re-throws every exception
 	 */
-	abstract protected Object getInstance(Class<?> clazz) throws Exception;
+	protected Object getInstance(Class<?> clazz) throws Exception
+	{
+		return clazz.getDeclaredConstructor().newInstance();
+	}
 
 	/**
-	 * Gets the instance to an object for the given class
-	 * 
+	 * Gets the instance of a class named by {@code AutoSet.className()}, on which the getter is called.
+	 * By default, the class is loaded by {@link Class#forName(String)} and the instance is created by its no-argument constructor.
+	 *
 	 * @param className the full name of the class to get the instance for
-	 * @return an instance to an object of the given class
+	 * @return an instance of the given class
 	 * @throws Exception re-throws every exception
 	 */
-	abstract protected Object getInstance(String className) throws Exception;
+	protected Object getInstance(String className) throws Exception
+	{
+		return this.getInstance(Class.forName(className));
+	}
 
 	/**
-	 * Computes and caches which methods should be called and setters and getters
-	 * to convert instances of classes.
-	 * 
+	 * Computes which setters of the destination class are called with the values of which getters
+	 * to convert instances of the source class into instances of the destination class.
+	 *
 	 * @param srcClass the class of the object to get values from
 	 * @param dstClass the class of the object to set values
+	 * @return the setters and their getters
 	 * @throws NoSuchMethodException thrown if the getter method cannot be determined
 	 * @throws Exception re-throws every exception
 	 */
-	protected void buildConversionMethodMap(Class<?> srcClass, Class<?> dstClass) throws NoSuchMethodException, Exception
+	private Map<Method, Getter> buildConversionMethodMap(Class<?> srcClass, Class<?> dstClass) throws NoSuchMethodException, Exception
 	{
 		Method[] methods = dstClass.getMethods();
 		Map<Method, Getter> methodMap = new HashMap<>();
@@ -136,7 +164,7 @@ abstract public class AutoObjectConverterImpl implements AutoObjectConverter
 			methodMap.put(setterMethod, getter);
 		}
 
-		this.conversionMethodMap.put(srcClass, methodMap);
+		return methodMap;
 	}
 
 	/**
@@ -148,13 +176,20 @@ abstract public class AutoObjectConverterImpl implements AutoObjectConverter
 		if (src == null) return;
 		if (dst == null) return;
 
-		Class<?> srcClass = src.getClass();
+		List<Class<?>> classes = Arrays.asList(src.getClass(), dst.getClass());
 
 		try
 		{
-			if (!this.conversionMethodMap.containsKey(srcClass)) this.buildConversionMethodMap(srcClass, dst.getClass());
-	
-			Map<Method, Getter> methodMap = this.conversionMethodMap.get(srcClass);
+			Map<Method, Getter> methodMap = this.conversionMethodMap.get(classes);
+
+			// computed outside of the map, since computeIfAbsent() can't throw checked exceptions; computing twice is harmless
+			if (methodMap == null)
+			{
+				methodMap = this.buildConversionMethodMap(src.getClass(), dst.getClass());
+
+				this.conversionMethodMap.put(classes, methodMap);
+			}
+
 			Collection<Method> setterMethods = methodMap.keySet();
 	
 			for (Method setterMethod : setterMethods)

@@ -7,7 +7,7 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 /**
  * Unit test configuration / implementation of the test suite for the SpringAutoObjectConverter
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 @ContextConfiguration(locations = { "file:src/test/resources/unittest-beans.xml" })

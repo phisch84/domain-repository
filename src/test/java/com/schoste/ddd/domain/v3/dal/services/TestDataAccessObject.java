@@ -12,7 +12,7 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
 /**
  * Test-side extension of a DAO which lets tests arrange the storage and observe how the repository uses the DAO.
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  * @param <ID> the data type of the identifiers of the data objects
  * @param <DO> the data object class

@@ -6,7 +6,7 @@ import java.util.Collection;
  * Interface for listeners of the {@link UnitOfWork}
  * These listeners will be called after actions like {@link UnitOfWork#commit()} and {@link UnitOfWork#rollback()} are called.
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public interface UnitOfWorkListener

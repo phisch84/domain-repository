@@ -7,7 +7,7 @@ import com.schoste.ddd.domain.v3.services.GenericRepository;
 /**
  * Example interface to a repository
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public interface DomainObjectRepository extends GenericRepository<Long, ExampleDomainObject, ExampleDO>
 {

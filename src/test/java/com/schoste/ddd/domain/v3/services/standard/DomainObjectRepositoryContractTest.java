@@ -15,7 +15,7 @@ import com.schoste.ddd.domain.v3.models.ExampleDomainObject;
 /**
  * Contract tests of the DomainObjectRepository on the mocked DAO
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 @ContextConfiguration(locations = { "file:src/test/resources/unittest-beans.xml" })

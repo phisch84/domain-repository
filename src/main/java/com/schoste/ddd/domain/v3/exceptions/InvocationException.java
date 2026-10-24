@@ -5,13 +5,19 @@ import java.lang.reflect.Method;
 /**
  * Indicates an error during method invocations via reflection
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class InvocationException extends DomainException
 {
 	private static final long serialVersionUID = 2580563565937648317L;
+	/**
+	 * The object on which the method was invoked
+	 */
 	private Object invoker;
+	/**
+	 * The method whose invocation failed
+	 */
 	private Method invokedMethod;
 
 	/**

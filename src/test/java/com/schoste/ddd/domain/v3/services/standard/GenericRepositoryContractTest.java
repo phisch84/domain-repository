@@ -29,7 +29,7 @@ import com.schoste.ddd.infrastructure.dao.v4.models.DataObject;
  * through the public interface of the repository, on a DAO which records how it is used ({@link TestDataAccessObject}).
  * The Javadoc of each test names its id in the test grid.
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  * @param <ID> the data type of the identifiers of the entities and data objects
  * @param <E> the entity class
@@ -144,9 +144,9 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 	}
 
 	@SafeVarargs
-	protected final ID[] ids(ID... ids)
+	protected final List<ID> ids(ID... ids)
 	{
-		return ids;
+		return Arrays.asList(ids);
 	}
 
 	protected Set<ID> idsOf(Collection<E> entities)
@@ -595,19 +595,8 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 	}
 
 	// ---------------------------------------------------------------------------------------------------------------
-	// get(ID[]) / get(Collection)
+	// get(Collection)
 	// ---------------------------------------------------------------------------------------------------------------
-
-	/**
-	 * S1: null isn't accepted as id array.
-	 *
-	 * @throws Exception re-throws every exception
-	 */
-	@Test(expected = IllegalArgumentException.class)
-	public void getIds_nullArray_throwsIllegalArgument() throws Exception
-	{
-		this.getRepository().get((ID[]) null);
-	}
 
 	/**
 	 * S1: null isn't accepted as id collection.
@@ -912,27 +901,6 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 		}
 	}
 
-	/**
-	 * S15: {@link GenericRepository#get(Collection)} behaves like {@link GenericRepository#get(Serializable[])}.
-	 *
-	 * @throws Exception re-throws every exception
-	 */
-	@Test
-	public void getCollection_knownUnknownAndDuplicateIds_behavesLikeArray() throws Exception
-	{
-		E known = this.loadEntity();
-		DO unknownDataObject = this.seedDataObject(false);
-
-		this.getDataAccessObject().resetStatistics();
-
-		Collection<E> fromCollection = collect(this.getRepository().get(Arrays.asList(known.getId(), unknownDataObject.getId(), known.getId())));
-		Collection<E> fromArray = collect(this.getRepository().get(this.ids(known.getId(), unknownDataObject.getId(), known.getId())));
-
-		Assert.assertEquals(2, fromCollection.size());
-		Assert.assertTrue(containsSame(fromCollection, known));
-		for (E entity : fromCollection) Assert.assertTrue(containsSame(fromArray, entity));
-		Assert.assertEquals(Arrays.asList(unknownDataObject.getId()), this.getDataAccessObject().getQueries().get(0).getIds());
-	}
 
 	// ---------------------------------------------------------------------------------------------------------------
 	// getAll(false)

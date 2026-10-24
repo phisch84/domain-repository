@@ -6,7 +6,7 @@ import com.schoste.ddd.domain.v3.exceptions.InvocationException;
 /**
  * Interface to the version 1 automated object converter
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public interface AutoObjectConverter
 {

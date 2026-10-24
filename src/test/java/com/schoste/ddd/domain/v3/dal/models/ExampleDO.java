@@ -5,7 +5,7 @@ import com.schoste.ddd.infrastructure.dao.v4.models.DataObject;
 
 /**
  * Example data object used in the DomainObjectRepository
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class ExampleDO extends DataObject<Long>

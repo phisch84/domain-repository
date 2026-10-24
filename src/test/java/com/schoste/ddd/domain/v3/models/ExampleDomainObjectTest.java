@@ -13,7 +13,7 @@ import com.schoste.ddd.domain.v3.entities.Entity;
  * Asserts how entities are compared, for ExampleDomainObject explicitly and BasicEntity implicitly:
  * equals uses identity, and {@link Entity#isSameEntityAs(Entity)} compares class and id.
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class ExampleDomainObjectTest

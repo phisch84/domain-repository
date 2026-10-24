@@ -3,7 +3,7 @@ package com.schoste.ddd.domain.v3.exceptions;
 /**
  * Basic class for all exceptions that originate from the domain layer
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public class DomainException extends Exception
 {

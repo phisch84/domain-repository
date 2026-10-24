@@ -7,7 +7,7 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 /**
  * Unit of Work tests for the DomainObjectRepository on the serialization DAO
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 @ContextConfiguration(locations = { "file:src/test/resources/integrationtest-beans.xml" })

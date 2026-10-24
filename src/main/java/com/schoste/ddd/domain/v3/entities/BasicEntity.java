@@ -11,13 +11,19 @@ import java.io.Serializable;
  * their id. A subclass may override {@link Object#equals(Object)} and {@link Object#hashCode()} itself, but only based on fields which
  * never change while the entity is used.
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  * @param <ID> the data type of the entity's identifier
  */
 public abstract class BasicEntity<ID extends Serializable> implements Entity<ID>
 {
+	/**
+	 * The id of the entity: virtual until it is persisted, then the id of its data object
+	 */
 	protected ID id;
+	/**
+	 * The state of the entity, managed by its repository
+	 */
 	protected State state;
 
 	/**

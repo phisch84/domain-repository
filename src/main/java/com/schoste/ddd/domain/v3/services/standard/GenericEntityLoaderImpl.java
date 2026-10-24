@@ -27,10 +27,25 @@ import com.schoste.ddd.infrastructure.dao.v4.models.DataObject;
  */
 public class GenericEntityLoaderImpl<ID extends Serializable, DO extends DataObject<ID>, E extends Entity<ID>> implements GenericEntityLoader<ID, DO, E>
 {
+    /**
+     * The cached entities which haven't been provided yet
+     */
     protected Queue<E> cachedEntities;
+    /**
+     * The ids of the entities provided so far
+     */
     protected Set<ID> providedIds;
-    protected Function<DO, E> dataObjToDomainObjFunction;
+    /**
+     * The function which converts a data object into an entity and caches it
+     */
+    protected Function<DO, E> dataObjToEntityFunction;
+    /**
+     * The stream of data objects from the DAO; closed when the loader is closed
+     */
     protected Stream<DO> dataObjStream;
+    /**
+     * The iterator of the data object stream, created on first use
+     */
     protected Iterator<DO> dataObjStreamIterator;
 
     /**
@@ -38,14 +53,14 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends DataObj
      * 
      * @param cachedEntities the entities which are already loaded and cached by the repository. They take precedence over data objects with the same id from the data object stream.
      * @param dataObjStream a stream (usually to a DAO) that provides the data objects of the entities
-     * @param dataObjToDomainObjFunction a function that will convert a data object from the data object stream into an entity
-     * @throws IllegalArgumentException thrown if cachedEntities, dataObjStream or dataObjToDomainObjFunction is null
+     * @param dataObjToEntityFunction a function that will convert a data object from the data object stream into an entity
+     * @throws IllegalArgumentException thrown if cachedEntities, dataObjStream or dataObjToEntityFunction is null
      */
-    public GenericEntityLoaderImpl(Collection<E> cachedEntities, Stream<DO> dataObjStream, Function<DO, E> dataObjToDomainObjFunction) throws IllegalArgumentException
+    public GenericEntityLoaderImpl(Collection<E> cachedEntities, Stream<DO> dataObjStream, Function<DO, E> dataObjToEntityFunction) throws IllegalArgumentException
     {
         if (cachedEntities == null) throw new IllegalArgumentException();
         if (dataObjStream == null) throw new IllegalArgumentException();
-        if (dataObjToDomainObjFunction == null) throw new IllegalArgumentException();
+        if (dataObjToEntityFunction == null) throw new IllegalArgumentException();
 
         this.cachedEntities = new ArrayDeque<>(cachedEntities.size());
         this.providedIds = new HashSet<>(cachedEntities.size());
@@ -58,7 +73,7 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends DataObj
             this.providedIds.add(cachedEntity.getId());
         }
 
-        this.dataObjToDomainObjFunction = dataObjToDomainObjFunction;
+        this.dataObjToEntityFunction = dataObjToEntityFunction;
         this.dataObjStream = dataObjStream;
         this.dataObjStreamIterator = this.dataObjStream.iterator();
     }
@@ -77,9 +92,9 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends DataObj
 
         if (!this.cachedEntities.isEmpty())
         {
-            E domainObj = this.cachedEntities.poll();
+            E entity = this.cachedEntities.poll();
 
-            action.accept(domainObj);
+            action.accept(entity);
 
             return true;
         }
@@ -91,9 +106,9 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends DataObj
             if (dataObj.isDeleted()) continue;
             if (!this.providedIds.add(dataObj.getId())) continue; // the id belongs to a cached entity or was provided already
 
-            E domainObj = this.convert(dataObj);
+            E entity = this.convert(dataObj);
 
-            action.accept(domainObj);
+            action.accept(entity);
 
             return true;
         }
@@ -140,11 +155,11 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends DataObj
      */
     protected E convert(DO dataObj) throws DataObjectConversionException
     {
-        E domainObj;
+        E entity;
 
         try
         {
-            domainObj = this.dataObjToDomainObjFunction.apply(dataObj);
+            entity = this.dataObjToEntityFunction.apply(dataObj);
         }
         catch (DataObjectConversionException e)
         {
@@ -155,9 +170,9 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends DataObj
             throw new DataObjectConversionException(dataObj.getId(), e);
         }
 
-        if (domainObj == null) throw new DataObjectConversionException(dataObj.getId(), null);
+        if (entity == null) throw new DataObjectConversionException(dataObj.getId(), null);
 
-        return domainObj;
+        return entity;
     }
 
     /**

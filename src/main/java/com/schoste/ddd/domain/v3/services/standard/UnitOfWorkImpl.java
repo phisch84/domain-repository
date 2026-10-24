@@ -25,7 +25,7 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
 /**
  * Implementation of the UOW interface
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public class UnitOfWorkImpl implements UnitOfWork
 {
@@ -47,7 +47,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 		}
 	}
 
-	private <ID extends Serializable, DO extends DataObject<ID>> void deleteDomainObjects(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
+	private <ID extends Serializable, DO extends DataObject<ID>> void deleteEntities(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
 	{
 		DAO<ID, DO> dao = repository.getDataAccessObject();
 		RepositoryChangeLog changeLog = this.changeLogs.get(repository);
@@ -60,7 +60,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 
 			for (Object objToRemove : objectsToRemove)
 			{
-				DO dataObject = repository.domainObjectToDataObject(objToRemove);
+				DO dataObject = repository.entityToDataObject(objToRemove);
 
 				dataObjects.add(dataObject);
 				dataObjectsToObjectsToRemove.put(System.identityHashCode(dataObject), objToRemove);
@@ -94,7 +94,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 		}
 	}
 
-	private <ID extends Serializable, DO extends DataObject<ID>> void persistNewDomainObjects(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
+	private <ID extends Serializable, DO extends DataObject<ID>> void persistNewEntities(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
 	{
 		DAO<ID, DO> dao = repository.getDataAccessObject();
 		RepositoryChangeLog changeLog = this.changeLogs.get(repository);
@@ -107,7 +107,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 
 			for (Object objToPersist : objectsToPersist)
 			{
-				DO dataObject = repository.domainObjectToDataObject(objToPersist);
+				DO dataObject = repository.entityToDataObject(objToPersist);
 
 				dataObjects.add(dataObject);
 				dataObjectsToObjectsToPersist.put(System.identityHashCode(dataObject), objToPersist);
@@ -116,7 +116,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 			dao.save(dataObjects);
 
 			// update the domain object in case the data object changed
-			for (DO dataObject : dataObjects) repository.dataObjectToDomainObject(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
+			for (DO dataObject : dataObjects) repository.dataObjectToEntity(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
 
 			this.notifyListenersAfterPersistNew(objectsToPersist);
 
@@ -139,7 +139,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 		}
 	}
 
-	private <ID extends Serializable, DO extends DataObject<ID>> void persistExistingDomainObjects(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
+	private <ID extends Serializable, DO extends DataObject<ID>> void persistExistingEntities(GenericRepositoryImpl<ID,?,DO> repository) throws Exception
 	{
 		DAO<ID, DO> dao = repository.getDataAccessObject();
 		RepositoryChangeLog changeLog = this.changeLogs.get(repository);
@@ -152,7 +152,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 
 			for (Object objToPersist : objectsToPersist)
 			{
-				DO dataObject = repository.domainObjectToDataObject(objToPersist);
+				DO dataObject = repository.entityToDataObject(objToPersist);
 
 				dataObjects.add(dataObject);
 				dataObjectsToObjectsToPersist.put(System.identityHashCode(dataObject), objToPersist);
@@ -161,7 +161,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 			dao.save(dataObjects);
 
 			// update the domain object in case the data object changed
-			for (DO dataObject : dataObjects) repository.dataObjectToDomainObject(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
+			for (DO dataObject : dataObjects) repository.dataObjectToEntity(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
 
 			this.notifyListenersAfterPersistExisting(objectsToPersist);
 
@@ -209,9 +209,9 @@ public class UnitOfWorkImpl implements UnitOfWork
 			//TODO: encapsulate in transaction
 			for (GenericRepositoryImpl<?,?,?> repository : this.changeLogs.keySet())
 			{					
-				this.deleteDomainObjects(repository);
-				this.persistNewDomainObjects(repository);
-				this.persistExistingDomainObjects(repository);
+				this.deleteEntities(repository);
+				this.persistNewEntities(repository);
+				this.persistExistingEntities(repository);
 			}
 		}
 		catch (DAOException e)

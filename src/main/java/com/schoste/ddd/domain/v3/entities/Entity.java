@@ -71,7 +71,7 @@ public interface Entity<ID extends Serializable>
 	/**
 	 * Gets the unique ID of the entity.
 	 * Entities of a repository must have a unique Identifier.
-	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity(Object...)})
+	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity()})
 	 * until they are persisted. Once they have been persisted, their ID is updated with the ID of their data object.
 	 *
 	 * @return the unique ID of the entity.
@@ -81,7 +81,7 @@ public interface Entity<ID extends Serializable>
 	/**
 	 * Sets the unique ID of the entity.
 	 * Entities of a repository must have a unique Identifier.
-	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity(Object...)})
+	 * Entities created by a repository get a virtual ID from the repository when they are newly created (see {@link GenericRepository#createEntity()})
 	 * until they are persisted. Once they have been persisted, their ID is updated with the ID of their data object.
 	 *
 	 * @param ID the unique ID of the entity.
@@ -98,7 +98,7 @@ public interface Entity<ID extends Serializable>
 	/**
 	 * Sets the entity's state which is evaluated by Units of Work.
 	 * The states are intended to be managed by the entity's repository. See:
-	 * {@link GenericRepository#createEntity(Object...)}, {@link GenericRepository#add(Entity)}, {@link GenericRepository#setModified(Entity)},
+	 * {@link GenericRepository#createEntity()}, {@link GenericRepository#add(Entity)}, {@link GenericRepository#setModified(Entity)},
 	 * and {@link GenericRepository#remove(Entity)}.
 	 * 
 	 * @param state the entity's state

@@ -16,7 +16,7 @@ import com.schoste.ddd.domain.v3.services.GenericEntityLoader;
 /**
  * Example implementation of the DomainObjectRepository interface
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, ExampleDomainObject, ExampleDO> implements DomainObjectRepository
@@ -26,8 +26,6 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 
 	@Autowired
 	private ExampleDAO dao;
-
-	protected Long lastVirtualId = -1L;
 
 	protected RuntimeException nextConversionFailure = null;
 
@@ -48,7 +46,7 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 	 * {@inheritDoc}
 	 */
 	@Override
-	protected void afterAutoConversation(ExampleDO dataObject, ExampleDomainObject domainObject) throws Exception
+	protected void doCompleteEntity(ExampleDO dataObject, ExampleDomainObject entity) throws Exception
 	{
 		RuntimeException failure = this.nextConversionFailure;
 
@@ -56,17 +54,7 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 
 		if (failure != null) throw failure;
 
-		// DO NOT SET THE ID OF THE DOMAIN-OBJECT
-		domainObject.setProperty3(dataObject.getProperty3());
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	protected Long getNextVirtualId()
-	{
-		return this.lastVirtualId--;
+		entity.setProperty3(dataObject.getProperty3());
 	}
 
 	/**
@@ -95,30 +83,14 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 	 * {@inheritDoc}
 	 */
 	@Override
-	protected void afterAutoConversation(ExampleDomainObject domainObject, ExampleDO dataObject) throws Exception
+	protected void doCompleteDataObject(ExampleDomainObject entity, ExampleDO dataObject) throws Exception
 	{
-		// DO NOT SET THE ID OF THE DOMAIN-OBJECT
-		dataObject.setProperty3(domainObject.getProperty3());
+		dataObject.setProperty3(entity.getProperty3());
 	}
 
-	@Override
-	public boolean isVirtualId(Long id) throws IllegalArgumentException
-	{
-		if (id == null) throw new IllegalArgumentException("id");
-		if (id > -1) return false;
-
-		return true;
-	}
-
-	@SuppressWarnings("unchecked")
-	@Override
-	protected GenericEntityLoader<Long, ExampleDO, ExampleDomainObject> createEntityLoader(Object... args) throws Exception
-	{
-		GenericEntityLoader<Long, ExampleDO, ExampleDomainObject> el = (GenericEntityLoader<Long, ExampleDO, ExampleDomainObject>) this.applicationContext.getBean(GenericEntityLoader.class, args);
-
-		return el;
-	}
-
+	/**
+	 * {@inheritDoc}
+	 */
 	@SuppressWarnings("unchecked")
 	@Override
 	protected GenericEntityLoader<Long, ExampleDO, ExampleDomainObject> createEntityLoader(Collection<ExampleDomainObject> cachedEntities, Stream<ExampleDO> dataObjStream, Function<ExampleDO, ExampleDomainObject> dataObjToEntityFunction) throws Exception

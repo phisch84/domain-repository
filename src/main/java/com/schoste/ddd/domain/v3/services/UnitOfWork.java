@@ -12,7 +12,7 @@ import com.schoste.ddd.infrastructure.dao.v4.exceptions.DAOException;
  * at a time: Units of Work registered with the same repository share its changes, i.e. each of them records the same changes,
  * commits them and rolls them back.
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public interface UnitOfWork extends RepositoryChangeListener
 {

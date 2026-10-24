@@ -5,7 +5,6 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -38,7 +37,7 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DeletedDataObjects;
 /**
  * Implementation of the generic repository
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  * @param <ID> the data type of the identifiers of the domain models and data objects
  * @param <E> the entity class
@@ -46,9 +45,21 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DeletedDataObjects;
  */
 abstract public class GenericRepositoryImpl<ID extends Serializable, E extends Entity<ID>, DO extends DataObject<ID>> implements GenericRepository<ID, E, DO>
 {	
+	/**
+	 * The listeners which are notified about changes of the repository
+	 */
 	protected Set<RepositoryChangeListener> changeListener = new HashSet<RepositoryChangeListener>();
+	/**
+	 * The cache: the known entities by their ids, weakly referenced so the garbage collector can claim them
+	 */
 	protected Map<ID, WeakReference<E>> loadedEntities = new HashMap<ID, WeakReference<E>>();
+	/**
+	 * The entities whose removal is pending, by their ids
+	 */
 	protected Map<ID, WeakReference<E>> pendingRemovals = new HashMap<ID, WeakReference<E>>();
+	/**
+	 * The modification time stamps of the data objects the known entities were loaded or last refreshed from, by their ids
+	 */
 	protected Map<ID, Long> loadedTimeStamps = new HashMap<ID, Long>();
 
 	/**
@@ -57,6 +68,13 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * {@link Long#MIN_VALUE} (the beginning) until a data object was consumed and after {@link GenericRepositoryImpl#reset()}.
 	 */
 	protected long recentTimestamp = Long.MIN_VALUE;
+
+	/**
+	 * Creates a new repository without entities. Implementing classes call it from their own constructors.
+	 */
+	protected GenericRepositoryImpl()
+	{
+	}
 
 	private void notifyObjectAdded(E entity)
 	{
@@ -119,87 +137,99 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	}
 
 	/**
-	 * Creates a new, unique virtual identifier for an entity (see {@link Entity#getId()}) which also identifies it
-	 * as not (yet) persisted.
-	 *
-	 * The returned identifier must be recognized as virtual by both {@link GenericRepositoryImpl#isVirtualId(Serializable)}
-	 * and {@link DAO#isVirtualId(Serializable)} of the repository's DAO:
-	 * {@link GenericRepositoryImpl#domainObjectToDataObject(Entity)} sets the entity's virtual id on a new data object,
-	 * and the DAO is supposed to treat it as a new data object when it is saved.
-	 *
-	 * @return a new, unique virtual identifier
+	 * The converter which copies the values of the properties annotated with AutoSet; created on first use by
+	 * {@link GenericRepositoryImpl#getAutoObjectConverter()}
 	 */
-	abstract protected ID getNextVirtualId();
+	private AutoObjectConverter autoObjectConverter = null;
 
 	/**
-	 * Returns an instance of the implementation of an {@link AutoObjectConverter} which will be used in
-	 * data-object-to-entity conversion methods (and vice versa)
+	 * Gets the DAO (Data Access Object) which loads and stores the data objects of the repository's entities.
+	 * This is the only method an implementing class must implement.
 	 *
-	 * @return an instance of the implementation of an {@link AutoObjectConverter}
-	 */
-	abstract protected AutoObjectConverter getAutoObjectConverter();
-
-	/**
-	 * The method which creates the actual instance of a new entity. This instance will then be used by
-	 * {@link GenericRepositoryImpl#createEntity(Object...)}.
-	 * To be implemented by the deriving class.
-	 * 
-	 * @param entityClass the class type of the entity to create
-	 * @param args optional arguments. Their usage depends on the implementation of the method.
-	 * @return a new instance of the repository's entity.
-	 * @throws Exception re-throws every exception
-	 */
-	abstract protected E doCreateEntity(Class<E> entityClass, Object... args) throws Exception;
-
-	/**
-	 * Gets the data access object (DAO) which is used to actually persist
-	 * the domain models
-	 *
-	 * @return a data access object (DAO)
+	 * @return the DAO of the repository; always the same instance
 	 */
 	abstract protected DAO<ID, DO> getDataAccessObject();
 
 	/**
-	 * Called by {@link GenericRepositoryImpl#dataObjectToDomainObject(DataObject, Entity)}
-	 * after the entity was enriched by the auto converter
-	 * 
-	 * @param dataObject the data object with source information
-	 * @param entity the entity to enrich with information
-	 * @throws Exception re-throws every exception
+	 * Gets the converter which copies the values of the properties annotated with AutoSet from data objects to entities
+	 * and back (see {@link AutoObjectConverter}).
+	 *
+	 * By default, an {@link AutoObjectConverterImpl} is created on first use, which creates the classes referenced by
+	 * AutoSet through their no-argument constructors. Override this method to use another converter, e.g. one which gets
+	 * these classes from Spring.
+	 *
+	 * @return the converter; always the same instance
 	 */
-	abstract protected void afterAutoConversation(DO dataObject, E entity) throws Exception;
+	protected synchronized AutoObjectConverter getAutoObjectConverter()
+	{
+		if (this.autoObjectConverter == null) this.autoObjectConverter = new AutoObjectConverterImpl();
+
+		return this.autoObjectConverter;
+	}
 
 	/**
-	 * Called by {@link GenericRepositoryImpl#domainObjectToDataObject(Entity)}
-	 * after the data object was enriched by the auto converter
+	 * Creates the instance of a new entity. The repository sets its id and state afterwards, so the instance doesn't need them.
+	 * It is called
+	 * <ul>
+	 * <li>by {@link GenericRepositoryImpl#createEntity()} without arguments, and by {@link GenericRepositoryImpl#createEntity(Object...)}
+	 * with the arguments of a typed factory method of the implementing class (e.g. {@code createCustomer(String name)});</li>
+	 * <li>without arguments for each entity which is loaded from the DAO; its values are set from the data object afterwards.</li>
+	 * </ul>
 	 *
-	 * @param entity the entity with source information
-	 * @param dataObject the data object to enrich with information
+	 * By default, the entity is created by the no-argument constructor of the entity class. Override this method if entities
+	 * are created otherwise, e.g. by Spring or with arguments.
+	 *
+	 * @param entityClass the entity class of the repository
+	 * @param args the arguments passed to {@link GenericRepositoryImpl#createEntity(Object...)}; empty if there are none
+	 * @return a new instance of the entity class
+	 * @throws IllegalArgumentException thrown by the default implementation if arguments are passed
 	 * @throws Exception re-throws every exception
 	 */
-	abstract protected void afterAutoConversation(E entity, DO dataObject) throws Exception;
+	protected E doCreateEntity(Class<E> entityClass, Object... args) throws IllegalArgumentException, Exception
+	{
+		if (args.length > 0) throw new IllegalArgumentException("args: the default doCreateEntity() uses the no-argument constructor; override it to use arguments");
+
+		return entityClass.getDeclaredConstructor().newInstance();
+	}
 
 	/**
-	 * Creates an entity loader ({@link GenericEntityLoader}) from implementation-specific arguments.
-	 * It is not used by this class; the get-methods use {@link GenericRepositoryImpl#createEntityLoader(Collection, Stream, Function)}.
+	 * Sets the values of an entity which the converter doesn't set, i.e. values of properties which aren't annotated with AutoSet.
+	 * Called by {@link GenericRepositoryImpl#dataObjectToEntity(DataObject, Entity)} after the converter has set the annotated
+	 * properties. Must not set the entity's id or state; the repository sets them.
 	 *
-	 * To be implemented by the extending class.
+	 * Does nothing by default.
 	 *
-	 * @param args optional arguments for the creation of the entity loader. Their usage depends on the actual implementation
-	 * @return a new entity loader
+	 * @param dataObject the data object to read the values from
+	 * @param entity the entity to set the values of
 	 * @throws Exception re-throws every exception
 	 */
-	abstract protected GenericEntityLoader<ID, DO, E> createEntityLoader(Object... args) throws Exception;
+	protected void doCompleteEntity(DO dataObject, E entity) throws Exception
+	{
+	}
+
+	/**
+	 * Sets the values of a data object which the converter doesn't set, i.e. values of properties which aren't annotated with AutoSet.
+	 * Called by {@link GenericRepositoryImpl#entityToDataObject(Entity)} after the converter has set the annotated
+	 * properties. Must not set the data object's id, time stamps or deleted flag; the repository and the DAO set them.
+	 *
+	 * Does nothing by default.
+	 *
+	 * @param entity the entity to read the values from
+	 * @param dataObject the data object to set the values of
+	 * @throws Exception re-throws every exception
+	 */
+	protected void doCompleteDataObject(E entity, DO dataObject) throws Exception
+	{
+	}
 
 	/**
 	 * Creates the entity loader ({@link GenericEntityLoader}) which provides the entities of the streams returned by
-	 * {@link GenericRepositoryImpl#get(Serializable[])}, {@link GenericRepositoryImpl#get(Collection)} and
-	 * {@link GenericRepositoryImpl#getAll(boolean)}.
+	 * {@link GenericRepositoryImpl#get(Collection)} and {@link GenericRepositoryImpl#getAll(boolean)}.
 	 * The returned loader must fulfill the contract of {@link GenericEntityLoader} and convert data objects with the given
 	 * conversion function, which caches the entities it creates and throws unchecked exceptions only.
 	 * The data object stream doesn't contain data objects of pending removals.
 	 *
-	 * To be implemented by the extending class.
+	 * By default, a {@link GenericEntityLoaderImpl} is created. Overriding this method is rarely needed.
 	 *
 	 * @param cachedEntities the entities which are already loaded and cached by the repository. They are provided as they are and take precedence over data objects with the same id.
 	 * @param dataObjStream the stream of data objects from the repository's DAO, which are converted into entities
@@ -207,7 +237,10 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * @return a new entity loader
 	 * @throws Exception re-throws every exception
 	 */
-	abstract protected GenericEntityLoader<ID, DO, E> createEntityLoader(Collection<E> cachedEntities, Stream<DO> dataObjStream, Function<DO, E> dataObjToEntityFunction) throws Exception;
+	protected GenericEntityLoader<ID, DO, E> createEntityLoader(Collection<E> cachedEntities, Stream<DO> dataObjStream, Function<DO, E> dataObjToEntityFunction) throws Exception
+	{
+		return new GenericEntityLoaderImpl<>(cachedEntities, dataObjStream, dataObjToEntityFunction);
+	}
 
 	/**
 	 * Calls an operation and returns its result.
@@ -262,37 +295,48 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	}
 
 	/**
-	 * Obtains the actual class of domain objects
-	 * 
-	 * @return the actual domain class
-	 * @throws IllegalStateException thrown if the actual domain class cannot be obtained
-	 * @throws Exception re-throws every exception
+	 * Gets a type argument of this class's declaration of {@link GenericRepositoryImpl}, also if the declaring class is a superclass
+	 * of this class (e.g. a repository which extends another repository class)
+	 *
+	 * @param index the index of the type argument: 0 for ID, 1 for E, 2 for DO
+	 * @return the class of the type argument
+	 * @throws IllegalStateException thrown if the type argument isn't a class, e.g. because the declaring class is generic itself
 	 */
-	@SuppressWarnings("rawtypes")
-	protected Class getDomainObjectClass() throws IllegalStateException, Exception
+	protected Class<?> getTypeArgument(int index) throws IllegalStateException
 	{
-		Type[] types = ((ParameterizedType) this.getClass().getGenericSuperclass()).getActualTypeArguments();
+		Class<?> declaringClass = this.getClass();
 
-		if (types.length < 2) throw new IllegalStateException();
+		while (declaringClass.getSuperclass() != GenericRepositoryImpl.class) declaringClass = declaringClass.getSuperclass();
 
-		return (Class) types[1];
+		Type type = ((ParameterizedType) declaringClass.getGenericSuperclass()).getActualTypeArguments()[index];
+
+		if (!(type instanceof Class)) throw new IllegalStateException(String.format("%s doesn't declare type argument %d of %s as a class", declaringClass.getName(), index, GenericRepositoryImpl.class.getSimpleName()));
+
+		return (Class<?>) type;
 	}
-	
+
 	/**
-	 * Obtains the actual class of data objects
-	 * 
-	 * @return the actual data class
-	 * @throws IllegalStateException thrown if the actual data class cannot be obtained
-	 * @throws Exception re-throws every exception
+	 * Gets the entity class of the repository (type argument E)
+	 *
+	 * @return the entity class
+	 * @throws IllegalStateException thrown if the entity class cannot be determined (see {@link GenericRepositoryImpl#getTypeArgument(int)})
 	 */
-	@SuppressWarnings("rawtypes")
-	protected Class getDataObjectClass() throws IllegalStateException, Exception
+	@SuppressWarnings("unchecked")
+	protected Class<E> getEntityClass() throws IllegalStateException
 	{
-		Type[] types = ((ParameterizedType) this.getClass().getGenericSuperclass()).getActualTypeArguments();
+		return (Class<E>) this.getTypeArgument(1);
+	}
 
-		if (types.length < 3) throw new IllegalStateException();
-
-		return (Class) types[2];
+	/**
+	 * Gets the data object class of the repository (type argument DO)
+	 *
+	 * @return the data object class
+	 * @throws IllegalStateException thrown if the data object class cannot be determined (see {@link GenericRepositoryImpl#getTypeArgument(int)})
+	 */
+	@SuppressWarnings("unchecked")
+	protected Class<DO> getDataObjectClass() throws IllegalStateException
+	{
+		return (Class<DO>) this.getTypeArgument(2);
 	}
 
 	/**
@@ -302,18 +346,19 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * The modification time stamp of the data object is recorded for {@link GenericRepositoryImpl#refresh()}.
 	 *
 	 * @param dataObject the data object as source
-	 * @param entity an existing entity to update with the provided data object. If null, a new one will be created
+	 * @param entity an existing entity to update with the provided data object. If null, a new one is created by
+	 * {@link GenericRepositoryImpl#doCreateEntity(Class, Object...)} without arguments
 	 * @return the new or updated entity
 	 * @throws IllegalArgumentException thrown if the dataObject is null
 	 * @throws Exception re-throws every exception
 	 */
-	protected synchronized E dataObjectToDomainObject(DO dataObject, E entity) throws Exception
+	protected synchronized E dataObjectToEntity(DO dataObject, E entity) throws Exception
 	{
 		if (dataObject == null) throw new IllegalArgumentException("dataObject");
-		if (entity == null) entity = this.createEntity();
+		if (entity == null) entity = this.newEntity();
 
 		this.getAutoObjectConverter().convert(dataObject, entity);
-		this.afterAutoConversation(dataObject, entity);
+		this.doCompleteEntity(dataObject, entity);
 
 		// Check if the DO exists in the repo already and if so, update it
 		boolean existed = (this.loadedEntities.remove(entity.getId()) != null);
@@ -329,7 +374,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	}
 
 	/**
-	 * Creates a new entity from a data object by calling the typed method dataObjectToDomainObject()
+	 * Creates a new entity from a data object by calling the typed method dataObjectToEntity()
 	 * 
 	 * @param dataObject the data object as source
 	 * @param entity an existing entity to update with the provided data object. If null, a new one will be created
@@ -338,12 +383,12 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * @throws Exception re-throws every exception
 	 */
 	@SuppressWarnings("unchecked")
-	protected E dataObjectToDomainObject(Object dataObject, Object entity) throws Exception
+	protected E dataObjectToEntity(Object dataObject, Object entity) throws Exception
 	{
 		if ((dataObject != null) && (!this.getDataObjectClass().isInstance(dataObject))) throw new IllegalArgumentException("dataObject");
-		if ((entity != null) && (!this.getDomainObjectClass().isInstance(entity))) throw new IllegalArgumentException("entity");
+		if ((entity != null) && (!this.getEntityClass().isInstance(entity))) throw new IllegalArgumentException("entity");
 		
-		return this.dataObjectToDomainObject((DO) dataObject, (E) entity);
+		return this.dataObjectToEntity((DO) dataObject, (E) entity);
 	}
 
 	/**
@@ -358,7 +403,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * @throws DataObjectNullException thrown if no data object could be created
 	 * @throws Exception re-throws every exception
 	 */
-	protected DO domainObjectToDataObject(E entity) throws Exception
+	protected DO entityToDataObject(E entity) throws Exception
 	{
 		if (entity == null) throw new IllegalArgumentException("entity");
 
@@ -371,7 +416,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 		dataObject.setDeleted(false);
 
 		this.getAutoObjectConverter().convert(entity, dataObject);
-		this.afterAutoConversation(entity, dataObject);
+		this.doCompleteDataObject(entity, dataObject);
 
 		return dataObject;
 	}
@@ -384,11 +429,11 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * @throws Exception re-throws every exception
 	 */
 	@SuppressWarnings("unchecked")
-	protected DO domainObjectToDataObject(Object entity) throws Exception
+	protected DO entityToDataObject(Object entity) throws Exception
 	{
-		if ((entity != null) && (!this.getDomainObjectClass().isInstance(entity))) throw new IllegalArgumentException("entity");
+		if ((entity != null) && (!this.getEntityClass().isInstance(entity))) throw new IllegalArgumentException("entity");
 		
-		return this.domainObjectToDataObject((E) entity);
+		return this.entityToDataObject((E) entity);
 	}
 	
 	/**
@@ -424,7 +469,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * @return the entity with the given id, or null if it does not exist
 	 * @throws Exception re-throws every exception
 	 */
-	protected synchronized E loadDomainObject(ID id) throws Exception
+	protected synchronized E loadEntity(ID id) throws Exception
 	{
 		if (this.isPendingRemoval(id)) return null;
 
@@ -468,7 +513,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 */
 	protected synchronized E createCachedEntity(DO dataObject) throws Exception
 	{
-		E entity = this.dataObjectToDomainObject(dataObject, this.createEntity());
+		E entity = this.dataObjectToEntity(dataObject, this.createEntity());
 
 		this.loadedEntities.put(entity.getId(), new WeakReference<E>(entity));
 
@@ -606,8 +651,17 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 	/**
 	 * {@inheritDoc}
+	 *
+	 * The repository decides like its DAO ({@link DAO#isVirtualId(Serializable)}), since the virtual ids of new entities come from
+	 * the DAO (see {@link GenericRepositoryImpl#createEntity()}).
 	 */
-	abstract public boolean isVirtualId(ID id) throws IllegalArgumentException;
+	@Override
+	public final boolean isVirtualId(ID id) throws IllegalArgumentException
+	{
+		if (id == null) throw new IllegalArgumentException("id");
+
+		return this.getDataAccessObject().isVirtualId(id);
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -635,26 +689,70 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	
 	/**
 	 * {@inheritDoc}
+	 *
+	 * The entity is created by {@link GenericRepositoryImpl#doCreateEntity(Class, Object...)} without arguments.
+	 * Its virtual id is the id of a new data object of the DAO ({@link DAO#createDataObject()}).
 	 */
 	@Override
-	public E createEntity(Object... args) throws DomainException
+	public E createEntity() throws DomainException
 	{
+		return this.createEntity(new Object[0]);
+	}
+
+	/**
+	 * Creates a new entity like {@link GenericRepositoryImpl#createEntity()}, but passes the given arguments to
+	 * {@link GenericRepositoryImpl#doCreateEntity(Class, Object...)}.
+	 * Meant for the typed factory methods of implementing classes whose entities are created with arguments, e.g.:
+	 * <pre>
+	 * public Customer createCustomer(String name) throws DomainException
+	 * {
+	 *     return this.createEntity(name);
+	 * }
+	 * </pre>
+	 *
+	 * @param args the arguments to pass to {@link GenericRepositoryImpl#doCreateEntity(Class, Object...)}
+	 * @return a new, Detached entity with a virtual id
+	 * @throws IllegalArgumentException thrown if args is null
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
+	 */
+	protected E createEntity(Object... args) throws IllegalArgumentException, DomainException
+	{
+		if (args == null) throw new IllegalArgumentException("args");
+
 		try
 		{
-			@SuppressWarnings("unchecked")
-			E obj = (E) this.doCreateEntity(this.getDomainObjectClass(), args);
+			DO dataObject = this.getDataAccessObject().createDataObject();
 
-			obj.setId(this.getNextVirtualId());
-			obj.setState(State.Detached);
-			
-			return obj;
+			if (dataObject == null) throw new DataObjectNullException(this.getDataAccessObject().getClass());
+
+			E entity = this.doCreateEntity(this.getEntityClass(), args);
+
+			entity.setId(dataObject.getId());
+			entity.setState(State.Detached);
+
+			return entity;
+		}
+		catch (DomainException e)
+		{
+			throw e;
 		}
 		catch (Exception e)
 		{
 			throw new DomainException(e);
 		}
 	}
-	
+
+	/**
+	 * Creates the instance of an entity which gets its id and values from a data object, i.e. without a virtual id
+	 *
+	 * @return a new entity, created by {@link GenericRepositoryImpl#doCreateEntity(Class, Object...)} without arguments
+	 * @throws Exception re-throws every exception
+	 */
+	protected E newEntity() throws Exception
+	{
+		return this.doCreateEntity(this.getEntityClass());
+	}
+
 	/**
 	 * {@inheritDoc}
 	 */
@@ -665,7 +763,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 		try
 		{
-			E entity = this.loadDomainObject(id);
+			E entity = this.loadEntity(id);
 			
 			return entity;
 		}
@@ -677,17 +775,6 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 		{
 			throw new DomainException(e);
 		}
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
-	public Stream<E> get(ID[] ids) throws IllegalArgumentException, DAOException, DomainException
-	{
-		if (ids == null) throw new IllegalArgumentException("ids");
-
-		return this.get(Arrays.asList(ids));
 	}
 
 	/**
@@ -923,7 +1010,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	/**
 	 * {@inheritDoc}
 	 *
-	 * When an entity is created from a data object or refreshed, {@link GenericRepositoryImpl#dataObjectToDomainObject(DataObject, Entity)}
+	 * When an entity is created from a data object or refreshed, {@link GenericRepositoryImpl#dataObjectToEntity(DataObject, Entity)}
 	 * records the data object's modification time stamp ({@link DataObject#getModifiedTimestamp()}) per id. The oldest recorded
 	 * time stamp of the known Unchanged entities is passed to {@link DAO#getModifiedSince(long, DeletedDataObjects)}; a reported data
 	 * object refreshes its entity only if its time stamp is greater than the recorded one.
@@ -1065,7 +1152,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	{
 		try
 		{
-			this.dataObjectToDomainObject(dataObject, entity);
+			this.dataObjectToEntity(dataObject, entity);
 		}
 		catch (Exception e)
 		{
@@ -1092,7 +1179,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 		try
 		{
-			isEntity = this.getDomainObjectClass().isInstance(obj);
+			isEntity = this.getEntityClass().isInstance(obj);
 		}
 		catch (Exception e)
 		{

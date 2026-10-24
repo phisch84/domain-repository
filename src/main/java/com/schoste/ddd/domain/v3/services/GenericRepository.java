@@ -15,12 +15,12 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DeletedDataObjects;
  * Generic interface to repositories.
  * 
  * Repositories manage access to entities ({@link Entity}) of an application, in particular
- * creating new entities via {@link GenericRepository#createEntity(Object...)}, which is supposed to work like a
+ * creating new entities via {@link GenericRepository#createEntity()}, which is supposed to work like a
  * factory method for each entity, and
  * looking these entities up and returning them via the get-methods of the repository, like {@link GenericRepository#get(Serializable)}.
  * 
  * An implementation of a repository must guarantee that calls to {@link GenericRepository#get(Collection)},
- * {@link GenericRepository#get(Serializable)}, {@link GenericRepository#get(Serializable[])} and
+ * {@link GenericRepository#get(Serializable)} and
  * {@link GenericRepository#getAll(boolean)} will return the same instances of entities in subsequent calls
  * as long as a reference to an entity is held somewhere. Once the garbage collector has claimed an
  * entity, these methods will return a new instance.
@@ -49,7 +49,7 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DeletedDataObjects;
  * This is supposed to be done by the implementations of the Unit of Work ({@link UnitOfWork}) when
  * {@link UnitOfWork#commit()} is called.
  * 
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  * @param <ID> the data type of the identifiers of the domain models and data objects
  * @param <E> the entity class
@@ -61,12 +61,13 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * Creates a new entity ({@link Entity}), but does not add it to the repository.
 	 * The new entity will have a new, unique virtual id and a detached state
 	 * ({@link Entity#setState(com.schoste.ddd.domain.v3.entities.Entity.State) detached}).
-	 * 
-	 * @param args optional arguments. Their actual meaning and use depend on the actual implementation
+	 * Repositories whose entities need data for their creation offer typed factory methods in addition
+	 * (e.g. {@code createCustomer(String name)}).
+	 *
 	 * @return the instance of a new entity
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
-	public E createEntity(Object... args) throws DomainException;
+	public E createEntity() throws DomainException;
 
 	/**
 	 * Determines if a given id is virtual or an actual id.
@@ -116,19 +117,6 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 *
 	 * The returned stream holds resources of the DAO and is supposed to be closed after use.
 	 * Failures which occur while the stream is consumed are thrown as unchecked exceptions (see {@link GenericEntityLoader}).
-	 *
-	 * @param ids the ids of the entities to get
-	 * @return a stream which provides the found entities
-	 *
-	 * @throws IllegalArgumentException thrown if parameter ids is null or contains null
-	 * @throws DAOException re-throws exceptions from the data access layer which occur before the stream is returned
-	 * @throws DomainException re-throws every exception as {@link DomainException}
-	 */
-	public Stream<E> get(ID[] ids) throws IllegalArgumentException, DAOException, DomainException;
-
-	/**
-	 * Tries to get all entities with an id contained in the provided ids.
-	 * Behaves exactly like {@link GenericRepository#get(Serializable[])} for the ids contained in the collection.
 	 *
 	 * @param ids the ids of the entities to get
 	 * @return a stream which provides the found entities

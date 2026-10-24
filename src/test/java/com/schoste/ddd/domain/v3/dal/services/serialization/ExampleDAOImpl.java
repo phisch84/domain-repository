@@ -15,7 +15,7 @@ import com.schoste.ddd.infrastructure.dao.v4.serialization.AbstractSerialization
  * Implementation of the ExampleDAO interface used in DomainObjectRepository.
  * Stores the data objects as serialized files (see {@link AbstractSerializationDAO}).
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class ExampleDAOImpl extends AbstractSerializationDAO<Long, ExampleDO> implements ExampleDAO
@@ -26,7 +26,12 @@ public class ExampleDAOImpl extends AbstractSerializationDAO<Long, ExampleDO> im
 	protected long lastVirtualId = 0;
 
 	/**
-	 * {@inheritDoc}
+	 * Creates a new DAO which stores the data objects in the given folder
+	 *
+	 * @param storagePath the path to the folder of the data objects
+	 * @throws IllegalArgumentException thrown if storagePath is null
+	 * @throws IllegalStateException thrown if the folder can't be used
+	 * @throws Exception re-throws every exception
 	 */
 	public ExampleDAOImpl(String storagePath) throws IllegalArgumentException, IllegalStateException, Exception
 	{

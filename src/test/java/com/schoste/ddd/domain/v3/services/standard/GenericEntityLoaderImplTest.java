@@ -24,7 +24,7 @@ import com.schoste.ddd.infrastructure.dao.v4.exceptions.DAORuntimeException;
 /**
  * Tests of {@link GenericEntityLoaderImpl} without a repository or DAO (layer L of the test grid).
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  */
 public class GenericEntityLoaderImplTest
 {

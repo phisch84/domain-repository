@@ -16,7 +16,7 @@ import com.schoste.ddd.infrastructure.dao.v4.services.DeletedDataObjects;
  * Implementation of the ExampleDAO interface used in DomainObjectRepository.
  * Keeps the data objects in memory (see {@link AbstractInMemoryDAO}) and records how it is used (see {@link TestDataAccessObject}).
  *
- * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ * @author Philipp Schosteritsch &lt;s.philipp@schoste.com&gt;
  *
  */
 public class ExampleDAOImpl extends AbstractInMemoryDAO<ExampleDO> implements ExampleDAO, TestDataAccessObject<Long, ExampleDO>
