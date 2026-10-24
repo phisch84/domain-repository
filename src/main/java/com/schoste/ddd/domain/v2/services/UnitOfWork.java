@@ -22,8 +22,16 @@ public interface UnitOfWork extends RepositoryChangeListener
 	public void commit() throws DALException, DomainException;
 	
 	/**
-	 * Reverts all changes of the repositories
-	 * 
+	 * Discards all changes which have been registered with this Unit of Work and haven't been committed yet.
+	 * Nothing is written to the underlying data sources.
+	 *
+	 * The changes are discarded by letting the repositories forget the affected entities, since the storage is the gold source:
+	 * every entity which has been added, flagged for removal or marked as modified since the last {@link UnitOfWork#commit()}
+	 * is evicted from its repository's cache (and from its pending removals), and its state is set to Detached.
+	 * The in-memory values of the entities are not restored. To continue working with an entity, get it from the repository again;
+	 * the repository then provides a new instance with the state of the storage (or none, if the entity hadn't been persisted).
+	 * Changes registered with other Units of Work are not affected.
+	 *
 	 * @throws DomainException re-throws all exceptions as {@link DomainException}
 	 */
 	public void rollback() throws DomainException;

@@ -21,7 +21,8 @@ import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
  * <li>the cached entities are provided as they are (the same instances, neither updated nor replaced);</li>
  * <li>no entity is provided twice, i.e. no new entity is created for a data object whose id belongs to a cached entity;</li>
  * <li>no entity is provided for a data object which is flagged deleted ({@link GenericDataObject#getIsDeleted()} is true);</li>
- * <li>no entity is provided for an id whose removal is pending (see {@link GenericRepository});</li>
+ * <li>no entity is provided for an id whose removal is pending (see {@link GenericRepository}); the repository removes
+ * the data objects of these ids from the data object stream before it passes the stream to the loader;</li>
  * <li>entities created from data objects are cached by the repository, so that subsequent calls of the repository's
  * get-methods return the same instances (see {@link GenericRepository});</li>
  * <li>no null elements are provided.</li>

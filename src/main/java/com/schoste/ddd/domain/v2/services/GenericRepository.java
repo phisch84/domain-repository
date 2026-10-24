@@ -35,7 +35,9 @@ import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
  *
  * The cache takes precedence over the DAO: for a known entity, the get-methods return the cached instance without querying the DAO
  * for it. A cached entity therefore reflects the storage at the time it was loaded; if others modify or delete its data object,
- * this isn't reflected until the entity has been claimed by the garbage collector.
+ * this isn't reflected as long as the entity is held somewhere. The repository never refreshes such an entity by itself:
+ * refreshing is the caller's decision, e.g. by {@link UnitOfWork#rollback()} or {@link GenericRepository#reset()}, after which
+ * the get-methods load the entities from the storage again. The storage remains the gold source.
  *
  * An {@link IllegalArgumentException} or {@link IllegalStateException} documented by a method is thrown as it is, also by the
  * overloads which take an {@link Object}. Every other exception is re-thrown as {@link DomainException}, or as
@@ -294,15 +296,16 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	public void removeChangeListener(RepositoryChangeListener listener);
 
 	/**
-	 * Resets the repository by removing all listeners and clearing all loaded objects.
+	 * Resets the repository by removing all listeners and forgetting all entities.
 	 *
-	 * Entities keep their states, and changes which have already been registered with a Unit of Work ({@link UnitOfWork})
-	 * are not discarded, since the Unit of Work is only removed as a listener.
+	 * Every known entity is evicted from the cache and its state is set to Detached; pending removals are forgotten as well.
+	 * This is the same as {@link UnitOfWork#rollback()} does for the entities registered with a Unit of Work, applied to all
+	 * entities of the repository. After the reset, the repository doesn't know any entity anymore: the get-methods load
+	 * entities from the DAO again and provide new instances.
+	 *
+	 * Units of Work ({@link UnitOfWork}) are only removed as listeners; changes which have already been registered with them
+	 * are not discarded. Since the affected entities are Detached now, committing these changes afterwards leads to undefined results.
 	 * Call {@link UnitOfWork#commit()} or {@link UnitOfWork#rollback()} before resetting the repository.
-	 * After the reset, the repository doesn't know any entity anymore, e.g. {@link GenericRepository#remove(Entity)}
-	 * will only detach a previously loaded entity, but won't flag it for removal from the storage.
-	 * Pending removals are forgotten as well, so the get-methods load their entities from the DAO again
-	 * until the Unit of Work has committed the removals.
 	 *
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */

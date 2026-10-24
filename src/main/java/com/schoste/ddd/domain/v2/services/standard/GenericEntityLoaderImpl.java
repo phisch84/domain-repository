@@ -3,15 +3,19 @@ package com.schoste.ddd.domain.v2.services.standard;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Queue;
+import java.util.Set;
 import java.util.Spliterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
 import com.schoste.ddd.domain.v2.entities.Entity;
+import com.schoste.ddd.domain.v2.exceptions.DataObjectConversionException;
 import com.schoste.ddd.domain.v2.services.GenericEntityLoader;
+import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALRuntimeException;
 import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 
 /**
@@ -24,6 +28,7 @@ import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 public class GenericEntityLoaderImpl<ID extends Serializable, DO extends GenericDataObject<ID>, E extends Entity<ID>> implements GenericEntityLoader<ID, DO, E>
 {
     protected Queue<E> cachedEntities;
+    protected Set<ID> providedIds;
     protected Function<DO, E> dataObjToDomainObjFunction;
     protected Stream<DO> dataObjStream;
     protected Iterator<DO> dataObjStreamIterator;
@@ -42,7 +47,17 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends Generic
         if (dataObjStream == null) throw new IllegalArgumentException();
         if (dataObjToDomainObjFunction == null) throw new IllegalArgumentException();
 
-        this.cachedEntities = new ArrayDeque<>(cachedEntities);
+        this.cachedEntities = new ArrayDeque<>(cachedEntities.size());
+        this.providedIds = new HashSet<>(cachedEntities.size());
+
+        for (E cachedEntity : cachedEntities)
+        {
+            if (cachedEntity == null) continue;
+
+            this.cachedEntities.add(cachedEntity);
+            this.providedIds.add(cachedEntity.getId());
+        }
+
         this.dataObjToDomainObjFunction = dataObjToDomainObjFunction;
         this.dataObjStream = dataObjStream;
         this.dataObjStreamIterator = this.dataObjStream.iterator();
@@ -69,10 +84,14 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends Generic
             return true;
         }
 
-        if (this.dataObjStreamIterator.hasNext())
+        DO dataObj;
+
+        while ((dataObj = this.nextDataObject()) != null)
         {
-            DO dataObj = this.dataObjStreamIterator.next();
-            E domainObj = this.dataObjToDomainObjFunction.apply(dataObj);
+            if (dataObj.getIsDeleted()) continue;
+            if (!this.providedIds.add(dataObj.getId())) continue; // the id belongs to a cached entity or was provided already
+
+            E domainObj = this.convert(dataObj);
 
             action.accept(domainObj);
 
@@ -80,6 +99,65 @@ public class GenericEntityLoaderImpl<ID extends Serializable, DO extends Generic
         }
 
         return false;
+    }
+
+    /**
+     * Gets the next data object from the data object stream.
+     *
+     * @return the next data object, or null if there are no more data objects
+     * @throws DALRuntimeException thrown if the data object stream fails. A {@link DALRuntimeException} is passed on as it is,
+     * every other exception becomes the cause of a new one
+     */
+    protected DO nextDataObject() throws DALRuntimeException
+    {
+        try
+        {
+            while (this.dataObjStreamIterator.hasNext())
+            {
+                DO dataObj = this.dataObjStreamIterator.next();
+
+                if (dataObj != null) return dataObj;
+            }
+
+            return null;
+        }
+        catch (DALRuntimeException e)
+        {
+            throw e;
+        }
+        catch (RuntimeException e)
+        {
+            throw new DALRuntimeException(e);
+        }
+    }
+
+    /**
+     * Converts a data object into an entity by calling the conversion function.
+     *
+     * @param dataObj the data object to convert
+     * @return the entity, never null
+     * @throws DataObjectConversionException thrown if the conversion function throws or returns null
+     */
+    protected E convert(DO dataObj) throws DataObjectConversionException
+    {
+        E domainObj;
+
+        try
+        {
+            domainObj = this.dataObjToDomainObjFunction.apply(dataObj);
+        }
+        catch (DataObjectConversionException e)
+        {
+            throw e;
+        }
+        catch (RuntimeException e)
+        {
+            throw new DataObjectConversionException(dataObj.getId(), e);
+        }
+
+        if (domainObj == null) throw new DataObjectConversionException(dataObj.getId(), null);
+
+        return domainObj;
     }
 
     /**
