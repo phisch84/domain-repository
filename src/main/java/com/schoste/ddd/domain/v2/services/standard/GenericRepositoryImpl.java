@@ -41,6 +41,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 {	
 	protected Set<RepositoryChangeListener> changeListener = new HashSet<RepositoryChangeListener>();
 	protected Map<ID, WeakReference<E>> loadedEntities = new HashMap<ID, WeakReference<E>>();
+	protected Map<ID, WeakReference<E>> pendingRemovals = new HashMap<ID, WeakReference<E>>();
 
 	private void notifyObjectAdded(E entity)
 	{
@@ -355,6 +356,30 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	}
 	
 	/**
+	 * Checks if the removal of the entity with a given id is pending, i.e. the entity has been flagged for removal by
+	 * {@link GenericRepositoryImpl#remove(Entity)}, but the removal hasn't been committed yet.
+	 * A removal is no longer pending once its entity has left the state Deleted (e.g. the Unit of Work has committed it and
+	 * set the entity Detached); its entry is removed then.
+	 *
+	 * @param id the id of the entity
+	 * @return true if the removal of the entity is pending, false otherwise
+	 */
+	protected synchronized boolean isPendingRemoval(ID id)
+	{
+		WeakReference<E> entityRef = this.pendingRemovals.get(id);
+
+		if (entityRef == null) return false;
+
+		E entity = entityRef.get();
+
+		if ((entity != null) && (entity.getState() == State.Deleted)) return true;
+
+		this.pendingRemovals.remove(id);
+
+		return false;
+	}
+
+	/**
 	 * Tries to get an entity from the cache.
 	 * If it isn't found in the cache and the id is an actual id, then it is reloaded from the DAL.
 	 * If it isn't found in the cache and the id is a virtual id, then null is returned.
@@ -366,7 +391,9 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	protected synchronized E loadDomainObject(ID id) throws Exception
 	{
 		E entity = null;
-		
+
+		if (this.isPendingRemoval(id)) return null;
+
 		if (this.loadedEntities.containsKey(id))
 		{
 			// The object was loaded once; get it from cache
@@ -712,7 +739,9 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 				if (entity.getState() == State.Unchanged) entity.setState(State.Deleted);
 				if (entity.getState() == State.Modified) entity.setState(State.Deleted);
 				if (entity.getState() == State.Added) entity.setState(State.Detached);
-				
+
+				if (entity.getState() == State.Deleted) this.pendingRemovals.put(entity.getId(), new WeakReference<E>(entity));
+
 				this.notifyObjectRemoved(entity);
 			}
 			else
@@ -805,6 +834,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 			{
 				this.changeListener.clear();
 				this.loadedEntities.clear();
+				this.pendingRemovals.clear();
 			}
 		}
 		catch (Exception e)

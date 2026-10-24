@@ -29,6 +29,15 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 
 	protected Long lastVirtualId = -1L;
 
+	protected RuntimeException nextConversionFailure = null;
+
+	/**
+	 * Lets the next conversion of a data object into an entity fail
+	 *
+	 * @param failure the exception the next conversion throws
+	 */
+	public synchronized void failNextConversion(RuntimeException failure) { this.nextConversionFailure = failure; }
+
 	/**
 	 * {@inheritDoc}
 	 */
@@ -41,6 +50,12 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 	@Override
 	protected void afterAutoConversation(ExampleDO dataObject, ExampleDomainObject domainObject) throws Exception
 	{
+		RuntimeException failure = this.nextConversionFailure;
+
+		this.nextConversionFailure = null;
+
+		if (failure != null) throw failure;
+
 		// DO NOT SET THE ID OF THE DOMAIN-OBJECT
 		domainObject.setProperty3(dataObject.getProperty3());
 	}
@@ -103,7 +118,7 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 	@Override
 	public boolean isVirtualId(Long id) throws IllegalArgumentException
 	{
-		if (id == null) return false;
+		if (id == null) throw new IllegalArgumentException("id");
 		if (id > -1) return false;
 
 		return true;
