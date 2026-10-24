@@ -21,6 +21,7 @@ import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
  * <li>the cached entities are provided as they are (the same instances, neither updated nor replaced);</li>
  * <li>no entity is provided twice, i.e. no new entity is created for a data object whose id belongs to a cached entity;</li>
  * <li>no entity is provided for a data object which is flagged deleted ({@link GenericDataObject#getIsDeleted()} is true);</li>
+ * <li>no entity is provided for an id whose removal is pending (see {@link GenericRepository});</li>
  * <li>entities created from data objects are cached by the repository, so that subsequent calls of the repository's
  * get-methods return the same instances (see {@link GenericRepository});</li>
  * <li>no null elements are provided.</li>
@@ -30,7 +31,15 @@ import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
  * Only data objects of ids without a cached entity are converted into entities.
  *
  * Data objects are loaded lazily: the DAO is only queried as far as the stream is consumed.
- * If a data object can't be converted into an entity, consuming the stream throws an unchecked exception.
+ * Failures while the stream is consumed happen after the repository's method has returned, and
+ * {@link Spliterator#tryAdvance(java.util.function.Consumer)} can't throw checked exceptions. Therefore they are thrown as unchecked exceptions:
+ * <ul>
+ * <li>If loading data objects from the DAO fails, a {@link com.schoste.ddd.infrastructure.dal.v3.exceptions.DALRuntimeException} is thrown.
+ * A {@link com.schoste.ddd.infrastructure.dal.v3.exceptions.DALRuntimeException} thrown by the DAO's stream is passed on as it is;
+ * a {@link com.schoste.ddd.infrastructure.dal.v3.exceptions.DALException} becomes its cause.</li>
+ * <li>If a data object can't be converted into an entity, a {@code DataObjectConversionException} is thrown. It is unchecked,
+ * carries the id of the data object which couldn't be converted, and has the original exception as its cause.</li>
+ * </ul>
  *
  * An entity loader holds resources of the DAO (e.g. open files or database cursors), which are released by
  * {@link AutoCloseable#close()}. The repository registers the loader as close handler of the returned stream

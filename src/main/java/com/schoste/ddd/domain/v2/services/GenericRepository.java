@@ -24,6 +24,23 @@ import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
  * as long as a reference to an entity is held somewhere. Once the garbage collector has claimed an
  * entity, these methods will return a new instance.
  *
+ * Terms used in this documentation:
+ * <ul>
+ * <li><b>cache</b>: the repository keeps weak references to the entities it has loaded, or which have been added to it, by their ids.</li>
+ * <li><b>known entity</b>: an entity is known to the repository if it is the very instance which is cached for its id.
+ * An id whose entity has been claimed by the garbage collector doesn't make an entity known.</li>
+ * <li><b>pending removal</b>: an entity which has been flagged for removal by {@link GenericRepository#remove(Entity)},
+ * but whose removal hasn't been committed yet ({@link UnitOfWork#commit()}). The get-methods treat it as non-existent.</li>
+ * </ul>
+ *
+ * The cache takes precedence over the DAO: for a known entity, the get-methods return the cached instance without querying the DAO
+ * for it. A cached entity therefore reflects the storage at the time it was loaded; if others modify or delete its data object,
+ * this isn't reflected until the entity has been claimed by the garbage collector.
+ *
+ * An {@link IllegalArgumentException} or {@link IllegalStateException} documented by a method is thrown as it is, also by the
+ * overloads which take an {@link Object}. Every other exception is re-thrown as {@link DomainException}, or as
+ * {@link DALException} where documented.
+ *
  * Repositories must not add, modify or delete data objects ({@link GenericDataObject}) of entities directly.
  * This is supposed to be done by the implementations of the Unit of Work ({@link UnitOfWork}) when
  * {@link UnitOfWork#commit()} is called.
@@ -60,14 +77,17 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	public boolean isVirtualId(ID id) throws IllegalArgumentException;
 
 	/**
-	 * Gets the entity with a given id. If no entity with the given id exists in the repository,
-	 * or if the entity's id exists in the repository, but no actual entity has been loaded,
-	 * then it will try to load it from the underlying DAO.
+	 * Gets the entity with a given id.
+	 * If the entity with the given id is known to the repository, the cached instance is returned without querying the DAO.
+	 * If the entity's removal is pending, null is returned.
+	 * Otherwise (the id isn't cached, or its entity has been claimed by the garbage collector), it will try to load the entity
+	 * from the underlying DAO; a loaded entity has the state Unchanged and is cached.
+	 * Virtual ids are never looked up in the DAO, since their entities haven't been persisted.
 	 * If the DAO returns a data object which is flagged deleted, the repository will treat it
 	 * as if it didn't exist / hadn't been returned by the DAO.
-	 * 
+	 *
 	 * @param id the id of the entity to get
-	 * @return the entity, or null if none was found or the entity's data object is flagged deleted
+	 * @return the entity, or null if none was found, the entity's data object is flagged deleted, or the entity's removal is pending
 	 * 
 	 * @throws IllegalArgumentException thrown if parameter id is null
 	 * @throws DALException re-throws exceptions from the data access layer
@@ -77,170 +97,185 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 
 	/**
 	 * Tries to get all entities with an id contained in the provided ids.
-	 * If no entity with a given id exists in the repository, it will try to load it from the underlying DAO.
-	 * If no data object with a requested id exists in the DAO, then it will simply be omitted.
-	 * If the data object is flagged deleted ({@link GenericDataObject#getIsDeleted()} is true),
-	 * the repository is supposed to set the entity deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted}),
-	 * remove the entity from its cache and not report it back in the stream.
+	 * Each entity is provided once, even if its id is contained multiple times in the provided ids.
+	 * For each id:
+	 * <ul>
+	 * <li>if its entity is known to the repository, the cached instance is provided without querying the DAO for it;</li>
+	 * <li>if its entity's removal is pending, the entity is omitted;</li>
+	 * <li>if it is a virtual id without a known entity, the entity is omitted (virtual ids are never looked up in the DAO);</li>
+	 * <li>otherwise, the entity is loaded from the data object returned by the underlying DAO, gets the state Unchanged and is cached.
+	 * If no data object with the id exists in the DAO, or if the data object is flagged deleted
+	 * ({@link GenericDataObject#getIsDeleted()} is true), the entity is omitted and the id is removed from the cache.</li>
+	 * </ul>
+	 * The DAO is only queried if at least one id is left to be loaded from it.
+	 * The order in which the entities are provided is undefined.
 	 *
-	 * The returned stream holds resources of the DAO and is supposed to be closed after use (see {@link GenericEntityLoader}).
+	 * The returned stream holds resources of the DAO and is supposed to be closed after use.
+	 * Failures which occur while the stream is consumed are thrown as unchecked exceptions (see {@link GenericEntityLoader}).
 	 *
 	 * @param ids the ids of the entities to get
 	 * @return a stream which provides the found entities
 	 *
 	 * @throws IllegalArgumentException thrown if parameter ids is null
-	 * @throws DALException re-throws exceptions from the data access layer
+	 * @throws DALException re-throws exceptions from the data access layer which occur before the stream is returned
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public Stream<E> get(ID[] ids) throws IllegalArgumentException, DALException, DomainException;
 
 	/**
 	 * Tries to get all entities with an id contained in the provided ids.
-	 * If no entity with a given id exists in the repository, it will try to load it from the underlying DAO.
-	 * If no data object with a requested id exists in the DAO, then it will simply be omitted.
-	 * If the data object is flagged deleted ({@link GenericDataObject#getIsDeleted()} is true),
-	 * the repository is supposed to set the entity deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted}),
-	 * remove the entity from its cache and not report it back in the stream.
-	 *
-	 * The returned stream holds resources of the DAO and is supposed to be closed after use (see {@link GenericEntityLoader}).
+	 * Behaves exactly like {@link GenericRepository#get(Serializable[])} for the ids contained in the collection.
 	 *
 	 * @param ids the ids of the entities to get
 	 * @return a stream which provides the found entities
-	 * 
+	 *
 	 * @throws IllegalArgumentException thrown if parameter ids is null
-	 * @throws DALException re-throws exceptions from the data access layer
+	 * @throws DALException re-throws exceptions from the data access layer which occur before the stream is returned
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public Stream<E> get(Collection<ID> ids) throws IllegalArgumentException, DALException, DomainException;
 
 	/**
-	 * Gets entities which are either already present in the repository, or for which there exists
-	 * a data object (see {@link GenericDataObject}) with a corresponding id
-	 * ({@link GenericDataObject#getId()} equals {@link Entity#getId()}) and which isn't flagged deleted
-	 * ({@link GenericDataObject#getIsDeleted()} is false).
-	 * 
-	 * The returned entities must include those entities whose ids exist in the repository's cache and which are already loaded.
-	 * Since these entities are most likely referenced elsewhere, they must not be changed by a reload.
+	 * Gets the entities of the repository: the entities known to the repository (including added entities which haven't been
+	 * persisted yet), and the entities of data objects (see {@link GenericDataObject}) which aren't flagged deleted
+	 * ({@link GenericDataObject#getIsDeleted()} is false). Each entity is provided once.
+	 * Entities whose removal is pending are omitted.
 	 *
-	 * For all entity ids in the repository's own cache for which no entity is loaded (anymore) and which haven't been reported by
-	 * {@link GenericDataAccessObject#getRecent()} (parameter recentOnly is true),
-	 * it is supposed to call {@link GenericDataAccessObject#get(Serializable[])} and update the entities with the data objects returned.
-	 * Since the returned stream is consumed lazily, these ids are only known once the data objects of
-	 * {@link GenericDataAccessObject#getRecent()} have been consumed; they are therefore requested at the end of the returned stream.
-	 * If no data object was returned for a given id, or if the data object was flagged deleted,
-	 * the repository is supposed to set the entity deleted ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted}),
-	 * remove the entity from its cache and not report it back in the stream.
-	 * 
-	 * In order to get potential new entities from the storage, or to update existing ones that are not in the cache (anymore,
-	 * i.e. their id isn't registered in the repository's cache):
+	 * Known entities are provided as they are. Since they are most likely referenced elsewhere, they must not be changed by a reload,
+	 * even if the DAO reports a newer data object for them (the cache takes precedence over the DAO).
+	 * Data objects of ids without a known entity are converted into new entities, which get the state Unchanged and are cached.
+	 *
+	 * The data objects are loaded from the DAO as follows:
 	 * <ul>
-	 * <li>If parameter recentOnly is true, then the repository is supposed to call {@link GenericDataAccessObject#getRecent()};
-	 * thus only new or modified data objects of entities are loaded from the DAO.</li>
-	 * <li>If parameter recentOnly is false, then the repository is supposed to call {@link GenericDataAccessObject#getAll()};
-	 * thus also data objects of entities that haven't been loaded yet (for whatever reason) are loaded.</li>
+	 * <li>If parameter recentOnly is false, the repository calls {@link GenericDataAccessObject#getAll()};
+	 * thus all data objects of the storage are loaded.</li>
+	 * <li>If parameter recentOnly is true, the repository calls {@link GenericDataAccessObject#getRecent()};
+	 * thus only data objects which were added or modified since the DAO's last call of {@link GenericDataAccessObject#getRecent()} are loaded.
+	 * Additionally, the cached ids whose entities have been claimed by the garbage collector and which haven't been reported by
+	 * {@link GenericDataAccessObject#getRecent()} are requested by {@link GenericDataAccessObject#get(Serializable[])}.
+	 * Since the returned stream is consumed lazily, these ids are only known once the data objects of
+	 * {@link GenericDataAccessObject#getRecent()} have been consumed; they are therefore requested at the end of the returned stream,
+	 * and only if there are any.</li>
 	 * </ul>
+	 * If no data object is returned for a cached id whose entity has been claimed by the garbage collector, or if its data object is
+	 * flagged deleted, the entity is omitted and the id is removed from the cache.
 	 *
-	 * Note that {@link GenericDataAccessObject#getRecent()} advances the DAO's most recent modification time stamp
-	 * ({@link GenericDataAccessObject#getLastModifiedTimeStamp()}) once its stream was consumed to its end.
-	 * If the DAO instance is shared with other repositories or services which also call {@link GenericDataAccessObject#getRecent()},
-	 * then data objects reported to them won't be reported to this repository again (and vice versa).
+	 * Consequences if parameter recentOnly is true:
+	 * <ul>
+	 * <li>Data objects which haven't changed since the DAO's last call of {@link GenericDataAccessObject#getRecent()} and whose ids
+	 * aren't cached (e.g. after {@link GenericRepository#reset()}) are not provided.</li>
+	 * <li>{@link GenericDataAccessObject#getRecent()} advances the DAO's most recent modification time stamp
+	 * ({@link GenericDataAccessObject#getLastModifiedTimeStamp()}) only once its stream was consumed to its end.
+	 * If the returned stream isn't consumed to its end (e.g. by {@link Stream#findFirst()}), the ids at the end of the stream
+	 * aren't requested, and the next call reports the same data objects again.</li>
+	 * <li>If the DAO instance is shared with other repositories or services which also call {@link GenericDataAccessObject#getRecent()},
+	 * then data objects reported to them won't be reported to this repository again (and vice versa).</li>
+	 * </ul>
+	 * Use recentOnly = false for a complete result.
 	 *
-	 * The returned stream holds resources of the DAO and is supposed to be closed after use (see {@link GenericEntityLoader}).
+	 * The order in which the entities are provided is undefined.
+	 * The returned stream holds resources of the DAO and is supposed to be closed after use.
+	 * Failures which occur while the stream is consumed are thrown as unchecked exceptions (see {@link GenericEntityLoader}).
 	 *
 	 * @param recentOnly if true, only new or modified data objects are loaded from the DAO (see {@link GenericDataAccessObject#getRecent()}),
 	 * if false, all data objects are loaded (see {@link GenericDataAccessObject#getAll()})
 	 * @return a stream which provides the found entities
 	 *
-	 * @throws DALException re-throws exceptions from the data access layer
+	 * @throws DALException re-throws exceptions from the data access layer which occur before the stream is returned
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
 	public Stream<E> getAll(boolean recentOnly) throws DALException, DomainException;
 
 	/**
-	 * Adds an entity to the repository if its state is either Detached or Added (multiple calls with the same entity have no effect).
-	 * The state of the entity is set to Added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added}),
-	 * the entity is added to the repository's internal cache, and {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)}
-	 * is called for the repository's listeners.
-	 * If an entity with the same id already exists in the repository's cache, but is a different instance than the provided id, then an exception is thrown.
-	 * If an entity with the same id already exists in the repository's cache, then this method does nothing - regardless of the state of the provided entity.
-	 * If the entity doesn't exist in the repository's cache yet and the state of the provided entity is anything other than Detached or Added, an exception is thrown.
-	 * The actual persistence of the entity is done by the Unit of Work ({@link UnitOfWork}) when
-     * {@link UnitOfWork#commit()} is called.
-	 * 
+	 * Adds an entity to the repository. The actual persistence of the entity is done by the Unit of Work ({@link UnitOfWork}) when
+	 * {@link UnitOfWork#commit()} is called.
+	 * <ul>
+	 * <li>If the entity is already known to the repository, this method does nothing - regardless of the entity's state.
+	 * Thus, multiple calls with the same entity have no effect.</li>
+	 * <li>If a different instance with the same id is known to the repository, an {@link IllegalArgumentException} is thrown.</li>
+	 * <li>Otherwise (the id isn't cached, or its entity has been claimed by the garbage collector), the entity must have the state
+	 * Detached or Added and a virtual id (see {@link GenericRepository#isVirtualId(Serializable)}), or an {@link IllegalStateException}
+	 * is thrown. An entity with an actual id has been persisted before (e.g. its removal has already been committed);
+	 * create a new entity instead. The state of the entity is set to Added
+	 * ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added}), the entity is added to the repository's cache,
+	 * and {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)} is called for the repository's listeners.</li>
+	 * </ul>
+	 *
 	 * @param entity the entity to add
-	 * @throws IllegalArgumentException thrown if the parameter entity is null, or if the provided entity has the same id as a cached entity, but is a different instance
-	 * @throws IllegalStateException thrown if the state of the entity is anything other than Detached or Added and the entity is unknown to the repository.
-	 * @throws DomainException re-throws every exception as {@link DomainException}
+	 * @throws IllegalArgumentException thrown if the parameter entity is null, or if a different instance with the same id is known to the repository
+	 * @throws IllegalStateException thrown if the entity is unknown to the repository and its state is anything other than Detached or Added, or its id isn't virtual
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void add(E entity) throws DomainException;
 	
 	/**
-	 * Adds an entity to the repository if its state is either Detached or Added (multiple calls with the same entity have no effect).
-	 * The state of the entity is set to Added ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) added}),
-	 * the entity is added to the repository's internal cache, and {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)}
-	 * is called for the repository's listeners.
-	 * If an entity with the same id already exists in the repository's cache, but is a different instance than the provided id, then an exception is thrown.
-	 * If an entity with the same id already exists in the repository's cache, then this method does nothing - regardless of the state of the provided entity.
-	 * If the entity doesn't exist in the repository's cache yet and the state of the provided entity is anything other than Detached or Added, an exception is thrown.
-	 * The actual persistence of the entity is done by the Unit of Work ({@link UnitOfWork}) when
-     * {@link UnitOfWork#commit()} is called.
-	 * 
+	 * Adds an entity to the repository. Behaves exactly like {@link GenericRepository#add(Entity)}.
+	 *
 	 * @param entity the entity to add
-	 * @throws IllegalArgumentException thrown if the parameter entity is null, or if the provided entity has the same id as a cached entity, but is a different instance
-	 * @throws IllegalStateException thrown if the state of the entity is anything other than Detached or Added and the entity is unknown to the repository.
-	 * @throws DomainException re-throws every exception as {@link DomainException}
+	 * @throws IllegalArgumentException thrown if the parameter entity is null or not an entity of this repository,
+	 * or if a different instance with the same id is known to the repository
+	 * @throws IllegalStateException thrown if the entity is unknown to the repository and its state is anything other than Detached or Added, or its id isn't virtual
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void add(Object entity) throws DomainException;
 	
 	/**
-	 * Flags an entity which is known to the repository (its id exists in the cache) for removal from the repository:
-	 * For entities with the state Unchanged or Modified, the state of the entity is set to Deleted
-	 * ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted}).
-	 * For entities with the state Added, the state of the entity is set to Detached.
-	 * The entity is only flagged for removal if there is an entity with the same id in the repository's cache.
-	 * If no entity with the same id exists, this method just sets the entity's state to Detached.
-	 * The actual removal of the entity is done by the Unit of Work ({@link UnitOfWork}) when
-     * {@link UnitOfWork#commit()} is called. After this call, the entity is evicted from the repository's cache.
-	 * 
+	 * Flags an entity for removal from the repository. The actual removal from the storage is done by the Unit of Work
+	 * ({@link UnitOfWork}) when {@link UnitOfWork#commit()} is called.
+	 * <ul>
+	 * <li>If the entity's state is Deleted (its removal is already pending), this method does nothing.</li>
+	 * <li>If the entity is known to the repository and its state is Unchanged or Modified, its state is set to Deleted
+	 * ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted}) and its removal is pending:
+	 * the entity is evicted from the cache, and the get-methods treat it as non-existent from now on.</li>
+	 * <li>If the entity is known to the repository and its state is Added (it hasn't been persisted yet), its state is set to Detached
+	 * and the entity is evicted from the cache. Nothing is removed from the storage.</li>
+	 * <li>If a different instance with the same id is known to the repository, an {@link IllegalArgumentException} is thrown.</li>
+	 * <li>If the entity is unknown to the repository, this method just sets the entity's state to Detached.
+	 * Nothing is removed from the storage.</li>
+	 * </ul>
+	 * If the entity was known to the repository, {@link RepositoryChangeListener#onObjectRemoved(GenericRepository, Object)}
+	 * is called for the repository's listeners.
+	 *
 	 * @param entity the entity to remove
-	 * @throws IllegalArgumentException thrown if the parameter entity is null
-	 * @throws DomainException re-throws every exception as {@link DomainException}
+	 * @throws IllegalArgumentException thrown if the parameter entity is null, or if a different instance with the same id is known to the repository
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void remove(E entity) throws DomainException;
 	
 	/**
-	 * Flags an entity which is known to the repository (its id exists in the cache) for removal from the repository:
-	 * For entities with the state Unchanged or Modified, the state of the entity is set to Deleted
-	 * ({@link Entity#setState(com.schoste.ddd.domain.v2.entities.Entity.State) deleted}).
-	 * For entities with the state Added, the state of the entity is set to Detached.
-	 * The entity is only flagged for removal if there is an entity with the same id in the repository's cache.
-	 * If no entity with the same id exists, this method just sets the entity's state to Detached.
-	 * The actual removal of the entity is done by the Unit of Work ({@link UnitOfWork}) when
-     * {@link UnitOfWork#commit()} is called. After this call, the entity is evicted from the repository's cache.
-	 * 
+	 * Flags an entity for removal from the repository. Behaves exactly like {@link GenericRepository#remove(Entity)}.
+	 *
 	 * @param entity the entity to remove
-	 * @throws IllegalArgumentException thrown if the parameter entity is null
-	 * @throws DomainException re-throws every exception as {@link DomainException}
+	 * @throws IllegalArgumentException thrown if the parameter entity is null or not an entity of this repository,
+	 * or if a different instance with the same id is known to the repository
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void remove(Object entity) throws DomainException;
 
 	/**
-	 * Marks an entity as modified so it will be persisted by the Unit of Work ({@link UnitOfWork}).
-	 * If the entity's state is anything other than Unchanged, the state won't change.
-	 * 
+	 * Marks an entity as modified so it will be persisted by the Unit of Work ({@link UnitOfWork}) when
+	 * {@link UnitOfWork#commit()} is called.
+	 * <ul>
+	 * <li>If the entity is known to the repository and its state is Unchanged, its state is set to Modified
+	 * and {@link RepositoryChangeListener#onObjectModified(GenericRepository, Object)} is called for the repository's listeners.</li>
+	 * <li>If the entity's state is anything other than Unchanged, the state won't change and the listeners aren't notified.</li>
+	 * <li>If the entity's state is Unchanged, but the entity is unknown to the repository, an {@link IllegalStateException} is thrown.</li>
+	 * </ul>
+	 *
 	 * @param entity the entity to mark as modified
 	 * @throws IllegalArgumentException thrown if the parameter entity is null
-	 * @throws DomainException re-throws every exception as {@link DomainException}
+	 * @throws IllegalStateException thrown if the entity's state is Unchanged, but the entity is unknown to the repository
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void setModified(E entity) throws DomainException;
-	
+
 	/**
-	 * Marks an entity as modified so it will be persisted by the Unit of Work ({@link UnitOfWork}).
-	 * If the entity's state is anything other than Unchanged, the state won't change.
-	 * 
+	 * Marks an entity as modified. Behaves exactly like {@link GenericRepository#setModified(Entity)}.
+	 *
 	 * @param entity the entity to mark as modified
-	 * @throws IllegalArgumentException thrown if the parameter entity is null
-	 * @throws DomainException re-throws every exception as {@link DomainException}
+	 * @throws IllegalArgumentException thrown if the parameter entity is null or not an entity of this repository
+	 * @throws IllegalStateException thrown if the entity's state is Unchanged, but the entity is unknown to the repository
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void setModified(Object entity) throws DomainException;
 
@@ -266,6 +301,8 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * Call {@link UnitOfWork#commit()} or {@link UnitOfWork#rollback()} before resetting the repository.
 	 * After the reset, the repository doesn't know any entity anymore, e.g. {@link GenericRepository#remove(Entity)}
 	 * will only detach a previously loaded entity, but won't flag it for removal from the storage.
+	 * Pending removals are forgotten as well, so the get-methods load their entities from the DAO again
+	 * until the Unit of Work has committed the removals.
 	 *
 	 * @throws DomainException re-throws every exception as {@link DomainException}
 	 */
