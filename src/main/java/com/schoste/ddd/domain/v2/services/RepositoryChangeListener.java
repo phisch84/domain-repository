@@ -1,6 +1,7 @@
 package com.schoste.ddd.domain.v2.services;
 
 import java.io.Closeable;
+import java.util.Collection;
 
 import com.schoste.ddd.domain.v2.exceptions.DomainException;
 
@@ -39,13 +40,14 @@ public interface RepositoryChangeListener extends Closeable
 	void onObjectModified(GenericRepository<?,?,?> repository, Object obj) throws DomainException;
 	
 	/**
-	 * Called before the repository is reloaded.
-	 * Currently, {@link com.schoste.ddd.domain.v2.services.standard.GenericRepositoryImpl} doesn't call this method,
-	 * since it doesn't provide a reload functionality. The hook is kept for a future reload based on
-	 * {@link com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject#getRecent()}.
+	 * Called after the repository has refreshed entities from the storage
+	 * (see {@link GenericRepository#refresh()} and {@link GenericRepository#refresh(com.schoste.ddd.domain.v2.entities.Entity)}).
+	 * Only entities with the state Unchanged are refreshed, so pending changes aren't affected.
 	 *
-	 * @param repository the repository for which to reset the change logs
+	 * @param repository the repository which has refreshed the entities
+	 * @param refreshedObjects the entities whose values were updated; they still have the state Unchanged
+	 * @param forgottenObjects the entities which were forgotten because their data objects were deleted in the storage; their state is Detached
 	 * @throws DomainException re-throws all exceptions as {@link DomainException}
 	 */
-	public void onReload(GenericRepository<?,?,?> repository) throws DomainException;
+	public void onRefreshed(GenericRepository<?,?,?> repository, Collection<Object> refreshedObjects, Collection<Object> forgottenObjects) throws DomainException;
 }

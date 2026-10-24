@@ -1,6 +1,7 @@
 package com.schoste.ddd.domain.v2.services.standard;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import com.schoste.ddd.domain.v2.services.GenericRepository;
@@ -16,6 +17,30 @@ public class RepositoryRecordingListener implements RepositoryChangeListener
 	private final List<Object> added = new ArrayList<>();
 	private final List<Object> removed = new ArrayList<>();
 	private final List<Object> modified = new ArrayList<>();
+	private final List<Object> refreshed = new ArrayList<>();
+	private final List<Object> forgotten = new ArrayList<>();
+	private int refreshNotifications = 0;
+
+	/**
+	 * Gets the refreshed objects of the received {@link RepositoryChangeListener#onRefreshed(GenericRepository, Collection, Collection)} notifications
+	 *
+	 * @return the refreshed objects in the order of the notifications
+	 */
+	public List<Object> getRefreshed() { return this.refreshed; }
+
+	/**
+	 * Gets the forgotten objects of the received {@link RepositoryChangeListener#onRefreshed(GenericRepository, Collection, Collection)} notifications
+	 *
+	 * @return the forgotten objects in the order of the notifications
+	 */
+	public List<Object> getForgotten() { return this.forgotten; }
+
+	/**
+	 * Gets the number of received {@link RepositoryChangeListener#onRefreshed(GenericRepository, Collection, Collection)} notifications
+	 *
+	 * @return the number of refresh notifications
+	 */
+	public int getRefreshNotifications() { return this.refreshNotifications; }
 
 	/**
 	 * Gets the objects of the received {@link RepositoryChangeListener#onObjectAdded(GenericRepository, Object)} notifications
@@ -43,7 +68,7 @@ public class RepositoryRecordingListener implements RepositoryChangeListener
 	 *
 	 * @return true if no notification was received
 	 */
-	public boolean isEmpty() { return this.added.isEmpty() && this.removed.isEmpty() && this.modified.isEmpty(); }
+	public boolean isEmpty() { return this.added.isEmpty() && this.removed.isEmpty() && this.modified.isEmpty() && (this.refreshNotifications == 0); }
 
 	@Override
 	public void onObjectAdded(GenericRepository<?,?,?> repository, Object obj) { this.added.add(obj); }
@@ -55,7 +80,12 @@ public class RepositoryRecordingListener implements RepositoryChangeListener
 	public void onObjectModified(GenericRepository<?,?,?> repository, Object obj) { this.modified.add(obj); }
 
 	@Override
-	public void onReload(GenericRepository<?,?,?> repository) { }
+	public void onRefreshed(GenericRepository<?,?,?> repository, Collection<Object> refreshedObjects, Collection<Object> forgottenObjects)
+	{
+		this.refreshNotifications++;
+		this.refreshed.addAll(refreshedObjects);
+		this.forgotten.addAll(forgottenObjects);
+	}
 
 	@Override
 	public void close() { }

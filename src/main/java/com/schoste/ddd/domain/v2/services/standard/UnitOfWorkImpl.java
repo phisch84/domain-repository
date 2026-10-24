@@ -274,66 +274,15 @@ public class UnitOfWorkImpl implements UnitOfWork
 		}
 	}
 
-	private void notifyListenersAfterReload(Collection<Object> objs)
-	{
-		for (UnitOfWorkListener listener : this.listners)
-		{
-			try
-			{
-				listener.afterReload(objs);
-			}
-			catch (Exception e)
-			{
-				e.printStackTrace(System.err);
-			}
-		}
-	}
-
 	/**
 	 * {@inheritDoc}
+	 *
+	 * A refresh only affects entities with the state Unchanged, which aren't recorded by a Unit of Work.
+	 * Therefore, the Unit of Work ignores this notification.
 	 */
-	public void onReload(GenericRepository<?,?,?> repository) throws DomainException
+	@Override
+	public void onRefreshed(GenericRepository<?,?,?> repository, Collection<Object> refreshedObjects, Collection<Object> forgottenObjects) throws DomainException
 	{
-		try
-		{
-			if (!this.changeLogs.containsKey(repository)) return;
-			
-			RepositoryChangeLog changeLog = this.changeLogs.get(repository);
-			Collection<Object> detachedObjects = new ArrayList<>();
-			
-			synchronized (changeLog.getObjectsToRemove())
-			{
-				for (Object objToRemove : changeLog.getObjectsToRemove())
-				{
-					if (objToRemove instanceof Entity) ((Entity<?>) objToRemove).setState(State.Detached);
-				}
-
-				detachedObjects.addAll(changeLog.getObjectsToRemove());
-				changeLog.getObjectsToRemove().clear();
-			}
-			
-			synchronized (changeLog.getObjectsToAdd())
-			{
-				for (Object objToAdd : changeLog.getObjectsToAdd())
-				{
-					if (objToAdd instanceof Entity) ((Entity<?>) objToAdd).setState(State.Detached);
-				}
-
-				detachedObjects.addAll(changeLog.getObjectsToAdd());
-				changeLog.getObjectsToAdd().clear();
-			}
-			
-			synchronized (changeLog.getObjectsToUpdate())
-			{
-				changeLog.getObjectsToUpdate().clear();
-			}
-
-			this.notifyListenersAfterReload(detachedObjects);
-		}
-		catch (Exception e)
-		{
-			throw new DomainException(e);
-		}
 	}
 
 	/**

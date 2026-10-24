@@ -42,11 +42,4 @@ public interface UnitOfWorkListener
 	 * @param objs the objects which were deleted
 	 */
 	void afterDelete(Collection<Object> objs);
-
-	/**
-	 * Called by the {@link UnitOfWork} after it was notified about the reload of a repository
-	 *
-	 * @param objs all the objects that were put into detached state
-	 */
-	void afterReload(Collection<Object> objs);
 }

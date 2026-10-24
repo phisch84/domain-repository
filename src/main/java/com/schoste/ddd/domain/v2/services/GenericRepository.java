@@ -36,8 +36,9 @@ import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
  * The cache takes precedence over the DAO: for a known entity, the get-methods return the cached instance without querying the DAO
  * for it. A cached entity therefore reflects the storage at the time it was loaded; if others modify or delete its data object,
  * this isn't reflected as long as the entity is held somewhere. The repository never refreshes such an entity by itself:
- * refreshing is the caller's decision, e.g. by {@link UnitOfWork#rollback()} or {@link GenericRepository#reset()}, after which
- * the get-methods load the entities from the storage again. The storage remains the gold source.
+ * refreshing is the caller's decision, either by {@link GenericRepository#refresh()} or {@link GenericRepository#refresh(Entity)},
+ * which update the held instances, or by {@link UnitOfWork#rollback()} or {@link GenericRepository#reset()}, after which
+ * the get-methods load new instances from the storage. The storage remains the gold source.
  *
  * An {@link IllegalArgumentException} or {@link IllegalStateException} documented by a method is thrown as it is, also by the
  * overloads which take an {@link Object}. Every other exception is re-thrown as {@link DomainException}, or as
@@ -280,6 +281,70 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * @throws DomainException re-throws every other exception as {@link DomainException}
 	 */
 	public void setModified(Object entity) throws DomainException;
+
+	/**
+	 * Refreshes the known entities from the storage: entities whose data objects have been modified in the storage after they
+	 * were loaded (or last refreshed) get the values of the modified data objects. The instances stay the same, so references
+	 * held elsewhere see the new values.
+	 * <ul>
+	 * <li>Known entities with the state Unchanged are refreshed: their values are updated in place and their state stays Unchanged.</li>
+	 * <li>If the data object of a known Unchanged entity is flagged deleted ({@link GenericDataObject#getIsDeleted()} is true),
+	 * the entity is forgotten: it is evicted from the cache and its state is set to Detached.</li>
+	 * <li>Modified entities are skipped: their local changes take precedence until they are committed ({@link UnitOfWork#commit()})
+	 * or rolled back ({@link UnitOfWork#rollback()}).</li>
+	 * <li>Added entities haven't been persisted yet, and entities whose removal is pending are treated as non-existent;
+	 * neither is refreshed.</li>
+	 * <li>Data objects without a known entity are ignored; the get-methods load them on demand.</li>
+	 * </ul>
+	 *
+	 * The modified data objects are requested by {@link GenericDataAccessObject#getRecent(long, boolean)}, including the data
+	 * objects flagged deleted, with the oldest modification time stamp of the data objects the known Unchanged entities were loaded
+	 * or last refreshed from. An entity is only refreshed if its data object is newer than the one it was loaded or last refreshed from.
+	 * All time stamps come from the storage, so the result doesn't depend on the clock of the repository's host.
+	 * The DAO's own most recent modification time stamp ({@link GenericDataAccessObject#getLastModifiedTimeStamp()}) isn't used,
+	 * so other users of a shared DAO instance aren't affected (unlike {@link GenericRepository#getAll(boolean)} with recentOnly = true).
+	 *
+	 * Data objects which are removed from the storage physically, instead of being flagged deleted, can't be reported by
+	 * {@link GenericDataAccessObject#getRecent(long, boolean)}; their entities aren't forgotten by this method.
+	 * Use {@link GenericRepository#refresh(Entity)} for them.
+	 * If there is no known Unchanged entity, the DAO isn't queried.
+	 *
+	 * This method is meant for fire-and-forget calls: entities which can't be refreshed (e.g. Modified ones) are skipped silently.
+	 * Callers which need to pay attention to the state of each entity use {@link GenericRepository#refresh(Entity)} instead
+	 * (e.g. in a loop), which throws if an entity can't be refreshed.
+	 *
+	 * After the refresh, {@link RepositoryChangeListener#onRefreshed(GenericRepository, Collection, Collection)} is called for the
+	 * repository's listeners, even if nothing was refreshed.
+	 *
+	 * @return the affected entities: the refreshed ones, which have the state Unchanged, and the forgotten ones, which have the
+	 * state Detached. The collection is empty if nothing was refreshed; callers which don't need it can ignore it.
+	 * @throws DALException re-throws exceptions from the data access layer
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
+	 */
+	public Collection<E> refresh() throws DALException, DomainException;
+
+	/**
+	 * Refreshes a known entity from the storage, regardless of time stamps: its data object is loaded by
+	 * {@link GenericDataAccessObject#get(Serializable)}, and the entity gets its values in place (the instance stays the same)
+	 * and keeps the state Unchanged.
+	 * If no data object exists for the entity's id anymore, or if it is flagged deleted ({@link GenericDataObject#getIsDeleted()} is true),
+	 * the entity is forgotten: it is evicted from the cache and its state is set to Detached.
+	 * The caller tells the outcome by the entity's state afterwards: Unchanged if it was refreshed, Detached if it was forgotten.
+	 *
+	 * Unlike {@link GenericRepository#refresh()}, this method is meant for callers which pay attention to the state of each entity:
+	 * it throws instead of skipping an entity which can't be refreshed.
+	 *
+	 * After the refresh, {@link RepositoryChangeListener#onRefreshed(GenericRepository, Collection, Collection)} is called for the
+	 * repository's listeners.
+	 *
+	 * @param entity the entity to refresh
+	 * @throws IllegalArgumentException thrown if the parameter entity is null, or if a different instance with the same id is known to the repository
+	 * @throws IllegalStateException thrown if the entity is unknown to the repository, or if its state isn't Unchanged
+	 * (local changes would be lost; commit or roll them back first)
+	 * @throws DALException re-throws exceptions from the data access layer
+	 * @throws DomainException re-throws every other exception as {@link DomainException}
+	 */
+	public void refresh(E entity) throws IllegalArgumentException, IllegalStateException, DALException, DomainException;
 
 	/**
 	 * Adds a listener which will be notified when the repository changes

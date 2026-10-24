@@ -855,6 +855,31 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	}
 
 	/**
+	 * {@inheritDoc}
+	 *
+	 * Implementation plan (draft): when an entity is created from a data object or refreshed, the repository records the data
+	 * object's modification time stamp ({@link GenericDataObject#getModifiedTimeStamp()}) per id. The oldest recorded time stamp of
+	 * the known Unchanged entities is passed to {@link GenericDataAccessObject#getRecent(long, boolean)}; a reported data object
+	 * refreshes its entity only if its time stamp is greater than the recorded one. Entities are updated in place by
+	 * {@link GenericRepositoryImpl#dataObjectToDomainObject(GenericDataObject, Entity)} and forgotten by
+	 * {@link GenericRepositoryImpl#forget(Entity)}. The recorded time stamps are dropped together with the cache entries.
+	 */
+	@Override
+	public Collection<E> refresh() throws DALException, DomainException
+	{
+		throw new UnsupportedOperationException("refresh() is not implemented yet");
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void refresh(E entity) throws IllegalArgumentException, IllegalStateException, DALException, DomainException
+	{
+		throw new UnsupportedOperationException("refresh(E) is not implemented yet");
+	}
+
+	/**
 	 * Casts an object, passed to one of the overloads which take an {@link Object}, into an entity of this repository.
 	 *
 	 * @param obj the object to cast
