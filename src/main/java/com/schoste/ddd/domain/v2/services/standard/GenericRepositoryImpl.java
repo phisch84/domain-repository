@@ -2,22 +2,25 @@ package com.schoste.ddd.domain.v2.services.standard;
 
 import java.io.Serializable;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Array;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import com.schoste.ddd.domain.v2.entities.Entity;
 import com.schoste.ddd.domain.v2.entities.Entity.State;
+import com.schoste.ddd.domain.v2.exceptions.DataObjectConversionException;
 import com.schoste.ddd.domain.v2.exceptions.DataObjectNullException;
 import com.schoste.ddd.domain.v2.exceptions.DomainException;
 import com.schoste.ddd.domain.v2.services.AutoObjectConverter;
@@ -25,6 +28,7 @@ import com.schoste.ddd.domain.v2.services.GenericRepository;
 import com.schoste.ddd.domain.v2.services.GenericEntityLoader;
 import com.schoste.ddd.domain.v2.services.RepositoryChangeListener;
 import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALException;
+import com.schoste.ddd.infrastructure.dal.v3.exceptions.DALRuntimeException;
 import com.schoste.ddd.infrastructure.dal.v3.models.GenericDataObject;
 import com.schoste.ddd.infrastructure.dal.v3.services.GenericDataAccessObject;
 
@@ -151,7 +155,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 	/**
 	 * Creates an entity loader ({@link GenericEntityLoader}) from implementation-specific arguments.
-	 * It is not used by this class; the get-methods use {@link GenericRepositoryImpl#createEntityLoader(Collection, Stream)}.
+	 * It is not used by this class; the get-methods use {@link GenericRepositoryImpl#createEntityLoader(Collection, Stream, Function)}.
 	 *
 	 * To be implemented by the extending class.
 	 *
@@ -165,16 +169,19 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * Creates the entity loader ({@link GenericEntityLoader}) which provides the entities of the streams returned by
 	 * {@link GenericRepositoryImpl#get(Serializable[])}, {@link GenericRepositoryImpl#get(Collection)} and
 	 * {@link GenericRepositoryImpl#getAll(boolean)}.
-	 * The returned loader must fulfill the contract of {@link GenericEntityLoader}.
+	 * The returned loader must fulfill the contract of {@link GenericEntityLoader} and convert data objects with the given
+	 * conversion function, which caches the entities it creates and throws unchecked exceptions only.
+	 * The data object stream doesn't contain data objects of pending removals.
 	 *
 	 * To be implemented by the extending class.
 	 *
 	 * @param cachedEntities the entities which are already loaded and cached by the repository. They are provided as they are and take precedence over data objects with the same id.
 	 * @param dataObjStream the stream of data objects from the repository's DAO, which are converted into entities
+	 * @param dataObjToEntityFunction the function which converts a data object into an entity and caches it (see {@link GenericRepositoryImpl#toCachedEntity(GenericDataObject)})
 	 * @return a new entity loader
 	 * @throws Exception re-throws every exception
 	 */
-	abstract protected GenericEntityLoader<ID, DO, E> createEntityLoader(Collection<E> cachedEntities, Stream<DO> dataObjStream) throws Exception;
+	abstract protected GenericEntityLoader<ID, DO, E> createEntityLoader(Collection<E> cachedEntities, Stream<DO> dataObjStream, Function<DO, E> dataObjToEntityFunction) throws Exception;
 
 	/**
 	 * Calls an operation and returns its result.
@@ -390,39 +397,145 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 */
 	protected synchronized E loadDomainObject(ID id) throws Exception
 	{
-		E entity = null;
-
 		if (this.isPendingRemoval(id)) return null;
 
-		if (this.loadedEntities.containsKey(id))
-		{
-			// The object was loaded once; get it from cache
-			WeakReference<E> refToDomainObject = this.loadedEntities.get(id);
-			
-			entity = refToDomainObject.get();
-		}
-		
-		if (entity == null)
-		{
-			// virtual ids will not exist in the DAO's storage -> return null
-			if (this.isVirtualId(id)) return null;
+		// The object was loaded once and is still referenced somewhere; get it from cache
+		E entity = this.getCachedEntity(id);
 
-			// The object was not loaded yet or was removed from cache; reload it
-			DO dataObject = this.getDataAccessObject().get(id);
+		if (entity != null) return entity;
 
-			if (dataObject == null) return null; // not found in DAO
-			if (dataObject.getIsDeleted()) return null; // found in DAO but flagged deleted
+		// virtual ids will not exist in the DAO's storage -> return null
+		if (this.isVirtualId(id)) return null;
 
-			// An object with the given id exists in the DAL; load it
-			entity = this.createEntity();
-			entity = this.dataObjectToDomainObject(dataObject, entity);
-			
-			WeakReference<E> refToDomainObject = new WeakReference<E>(entity);
-			
-			this.loadedEntities.put(entity.getId(), refToDomainObject);
-		}
-		
+		// The object was not loaded yet or was removed from cache; reload it
+		DO dataObject = this.getDataAccessObject().get(id);
+
+		if (dataObject == null) return null; // not found in DAO
+		if (dataObject.getIsDeleted()) return null; // found in DAO but flagged deleted
+
+		// An object with the given id exists in the DAL; load it
+		return this.createCachedEntity(dataObject);
+	}
+
+	/**
+	 * Gets the entity cached for an id
+	 *
+	 * @param id the id of the entity
+	 * @return the cached entity, or null if the id isn't cached or its entity has been claimed by the garbage collector
+	 */
+	protected synchronized E getCachedEntity(ID id)
+	{
+		WeakReference<E> entityRef = this.loadedEntities.get(id);
+
+		return (entityRef == null) ? null : entityRef.get();
+	}
+
+	/**
+	 * Creates a new entity with the state Unchanged from a data object and caches it
+	 *
+	 * @param dataObject the data object to create the entity from
+	 * @return the new entity
+	 * @throws Exception re-throws every exception
+	 */
+	protected synchronized E createCachedEntity(DO dataObject) throws Exception
+	{
+		E entity = this.dataObjectToDomainObject(dataObject, this.createEntity());
+
+		this.loadedEntities.put(entity.getId(), new WeakReference<E>(entity));
+
 		return entity;
+	}
+
+	/**
+	 * Converts a data object into an entity and caches it. This is the conversion function of the entity loaders
+	 * (see {@link GenericRepositoryImpl#createEntityLoader(Collection, Stream, Function)}).
+	 * If an entity has been cached for the data object's id in the meantime, the cached entity is returned, since the cache
+	 * takes precedence over the DAO.
+	 *
+	 * @param dataObject the data object to convert
+	 * @return the entity, never null
+	 * @throws DataObjectConversionException thrown if the data object couldn't be converted
+	 */
+	protected synchronized E toCachedEntity(DO dataObject) throws DataObjectConversionException
+	{
+		try
+		{
+			E entity = this.getCachedEntity(dataObject.getId());
+
+			return (entity != null) ? entity : this.createCachedEntity(dataObject);
+		}
+		catch (DataObjectConversionException e)
+		{
+			throw e;
+		}
+		catch (Exception e)
+		{
+			throw new DataObjectConversionException(dataObject.getId(), e);
+		}
+	}
+
+	/**
+	 * Creates the stream which is returned by the get-methods which return streams.
+	 * The data objects of pending removals are removed from the data object stream before it is passed to the entity loader.
+	 *
+	 * @param cachedEntities the cached entities to provide
+	 * @param dataObjStream the stream of data objects to convert into entities. It is closed when the returned stream is closed.
+	 * @return the stream of entities
+	 * @throws Exception re-throws every exception
+	 */
+	protected Stream<E> streamEntities(Collection<E> cachedEntities, Stream<DO> dataObjStream) throws Exception
+	{
+		try
+		{
+			Stream<DO> filteredStream = dataObjStream.filter(dataObj -> (dataObj == null) || !this.isPendingRemoval(dataObj.getId()));
+			GenericEntityLoader<ID, DO, E> el = this.createEntityLoader(cachedEntities, filteredStream, this::toCachedEntity);
+
+			return StreamSupport.stream(el, false).onClose(el);
+		}
+		catch (Exception e)
+		{
+			dataObjStream.close();
+
+			throw e;
+		}
+	}
+
+	/**
+	 * Gets the data objects reported by {@link GenericDataAccessObject#getRecent()}, followed by the data objects of the
+	 * given ids which haven't been reported by {@link GenericDataAccessObject#getRecent()}.
+	 * The latter are requested by {@link GenericDataAccessObject#get(Collection)} once the data objects of
+	 * {@link GenericDataAccessObject#getRecent()} have been consumed, and only if there are any.
+	 *
+	 * @param missingIds the ids to request if they aren't reported by {@link GenericDataAccessObject#getRecent()}
+	 * @return the stream of data objects
+	 * @throws DALException re-throws exceptions from the data access layer
+	 */
+	protected Stream<DO> streamRecentDataObjects(Set<ID> missingIds) throws DALException
+	{
+		Set<ID> reportedIds = new HashSet<>();
+		Stream<DO> recentStream = this.getDataAccessObject().getRecent().peek(dataObj -> { if (dataObj != null) reportedIds.add(dataObj.getId()); });
+
+		if (missingIds.isEmpty()) return recentStream;
+
+		Stream<DO> missingStream = Stream.of(missingIds).flatMap(ids ->
+		{
+			Set<ID> unreportedIds = new HashSet<>(ids);
+
+			unreportedIds.removeAll(reportedIds);
+
+			if (unreportedIds.isEmpty()) return Stream.<DO>empty();
+
+			try
+			{
+				return this.getDataAccessObject().get(unreportedIds);
+			}
+			catch (DALException e)
+			{
+				throw new DALRuntimeException(e);
+			}
+		});
+
+		return Stream.concat(recentStream, missingStream);
 	}
 
 	/**
@@ -508,49 +621,53 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	{
 		if (ids == null) throw new IllegalArgumentException("ids");
 
-		E entity = null;
-		WeakReference<E> refToDomainObject = null;
-		Collection<E> cachedEntities = new ArrayList<>(ids.length);
-		Set<ID> missingIds = new HashSet<>(ids.length);
+		return this.get(Arrays.asList(ids));
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public Stream<E> get(Collection<ID> ids) throws IllegalArgumentException, DALException, DomainException
+	{
+		if (ids == null) throw new IllegalArgumentException("ids");
+
+		Collection<E> cachedEntities = new ArrayList<>(ids.size());
+		Set<ID> missingIds = new HashSet<>(ids.size());
 
 		try
 		{
-			for (int i=0; i<ids.length; i++)
-			{		
-				if (!this.loadedEntities.containsKey(ids[i]))
+			synchronized (this)
+			{
+				// each id is regarded once, so each entity is provided once
+				for (ID id : new LinkedHashSet<>(ids))
 				{
+					if (id == null) continue;
+					if (this.isPendingRemoval(id)) continue;
+
+					E entity = this.getCachedEntity(id);
+
+					// the entity exists in the cache, so somewhere its reference is held -> do not reload / overwrite it
+					if (entity != null)
+					{
+						cachedEntities.add(entity);
+
+						continue;
+					}
+
+					// remove the ids with dead references. If it was a virtual id, the entity is abandoned.
+					// If it was an actual id, the entity will be reloaded from the DAO and added back to the cache if it still exists
+					this.loadedEntities.remove(id);
+
 					// only add actual ids for a reload from the DAO
-					if (!this.isVirtualId(ids[i])) missingIds.add(ids[i]);
-
-					continue;
+					if (!this.isVirtualId(id)) missingIds.add(id);
 				}
-
-				refToDomainObject = this.loadedEntities.get(ids[i]);
-				entity = refToDomainObject.get();
-
-				// the entity exists in the cache, so somewhere its reference is held -> do not reload / overwrite ...
-				if (entity != null)
-				{
-					// but make sure to store its hard reference
-					cachedEntities.add(entity);
-
-					continue;
-				}
-
-				// only add actual ids for a reload from the DAO
-				if (!this.isVirtualId(ids[i])) missingIds.add(ids[i]);
-
-				// remove the ids with dead references. If it was a virtual id, the entity is abandoned.
-				// If it was an actual id, the entity will be reloaded from the DAO and added back to the cache if it still exists
-				this.loadedEntities.remove(ids[i]);
 			}
 
-			Stream<DO> dataObjStream = this.getDataAccessObject().get(missingIds);
-			GenericEntityLoader<ID, DO, E> el = this.createEntityLoader(cachedEntities, dataObjStream);
-			Stream<E> entityStream = StreamSupport.stream(el, false);
-					  entityStream.onClose(el);
+			// the DAO is only queried if at least one id is left to be loaded from it
+			Stream<DO> dataObjStream = missingIds.isEmpty() ? Stream.<DO>empty() : this.getDataAccessObject().get(missingIds);
 
-			return entityStream;
+			return this.streamEntities(cachedEntities, dataObjStream);
 		}
 		catch (DALException e)
 		{
@@ -566,80 +683,39 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * {@inheritDoc}
 	 */
 	@Override
-	@SuppressWarnings("unchecked")
-	public Stream<E> get(Collection<ID> ids) throws IllegalArgumentException, DALException, DomainException
-	{
-		if (ids == null) throw new IllegalArgumentException("ids");
-
-		return this.get(call(() -> ids.toArray((ID[]) Array.newInstance(this.getDomainObjectClass(), ids.size()))));
-	}
-
-	/**
-	 * {@inheritDoc}
-	 */
-	@Override
 	public Stream<E> getAll(boolean recentOnly) throws DALException, DomainException
 	{
-		E entity = null;
-		Collection<E> cachedEntities = new ArrayList<>(this.loadedEntities.size());
-		Set<ID> missingIds = new HashSet<>(this.loadedEntities.size());
+		Collection<E> cachedEntities = new ArrayList<>();
+		Set<ID> missingIds = new HashSet<>();
 
 		try
 		{
-			Set<Entry<ID, WeakReference<E>>> loadedEntries = new HashSet<>(this.loadedEntities.entrySet());
-
-			for (Entry<ID, WeakReference<E>> entityEntry : loadedEntries)
+			synchronized (this)
 			{
-				ID entityId = entityEntry.getKey();
-				WeakReference<E> entityRef = entityEntry.getValue();
-
-				// virtual ids will not exist in the DAO, so if they have been unloaded, remove their entries from the cache
-				if (this.isVirtualId(entityId))
+				for (Entry<ID, WeakReference<E>> entityEntry : new ArrayList<>(this.loadedEntities.entrySet()))
 				{
-					if (entityRef == null)
+					ID entityId = entityEntry.getKey();
+					E entity = (entityEntry.getValue() == null) ? null : entityEntry.getValue().get();
+
+					if (entity != null)
 					{
-						this.loadedEntities.remove(entityId);
+						cachedEntities.add(entity);
 
 						continue;
 					}
 
-					entity = entityRef.get();
+					// remove the ids with dead references. Data objects which still exist are cached again when they are converted
+					this.loadedEntities.remove(entityId);
 
-					if (entity == null)
-					{
-						this.loadedEntities.remove(entityId);
-
-						continue;
-					}
+					// virtual ids will not exist in the DAO; actual ids are requested if getRecent() doesn't report them
+					if (!this.isVirtualId(entityId)) missingIds.add(entityId);
 				}
-
-				// the entity for an actual id has been unloaded. Add it to the set of ids for reloading from DAO
-				if (entityRef == null)
-				{
-					missingIds.add(entityId);
-
-					continue;
-				}
-
-				entity = entityRef.get();
-
-				if (entity == null)
-				{
-					missingIds.add(entityId);
-
-					continue;
-				}
-
-				cachedEntities.add(entity);
 			}
 
-			Stream<DO> dataObjStream = (recentOnly) ? this.getDataAccessObject().getRecent()
+			Stream<DO> dataObjStream = (recentOnly) ? this.streamRecentDataObjects(missingIds)
 													: this.getDataAccessObject().getAll();
-			GenericEntityLoader<ID, DO, E> el = this.createEntityLoader(cachedEntities, dataObjStream);
-			Stream<E> entityStream = StreamSupport.stream(el, false);
-					  entityStream.onClose(el);
 
-			return entityStream;
+			return this.streamEntities(cachedEntities, dataObjStream);
 		}
 		catch (DALException e)
 		{

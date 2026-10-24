@@ -101,20 +101,6 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 		dataObject.setProperty3(domainObject.getProperty3());
 	}
 
-	protected ExampleDomainObject safeDataObjectToDomainObject(ExampleDO dataObj)
-	{
-		try
-		{
-			return super.dataObjectToDomainObject(dataObj, null);
-		}
-		catch (Exception e)
-		{
-			e.printStackTrace(System.err);
-
-			return null;
-		}
-	}
-
 	@Override
 	public boolean isVirtualId(Long id) throws IllegalArgumentException
 	{
@@ -135,10 +121,9 @@ public class DomainObjectRepositoryImpl extends GenericRepositoryImpl<Long, Exam
 
 	@SuppressWarnings("unchecked")
 	@Override
-	protected GenericEntityLoader<Long, ExampleDO, ExampleDomainObject> createEntityLoader(Collection<ExampleDomainObject> cachedEntities, Stream<ExampleDO> dataObjStream) throws Exception
+	protected GenericEntityLoader<Long, ExampleDO, ExampleDomainObject> createEntityLoader(Collection<ExampleDomainObject> cachedEntities, Stream<ExampleDO> dataObjStream, Function<ExampleDO, ExampleDomainObject> dataObjToEntityFunction) throws Exception
 	{
-		Function<ExampleDO, ExampleDomainObject> dataObjToDomainObjFunction = dataObj -> this.safeDataObjectToDomainObject(dataObj);
-		GenericEntityLoader<Long, ExampleDO, ExampleDomainObject> el = (GenericEntityLoader<Long, ExampleDO, ExampleDomainObject>) this.applicationContext.getBean(GenericEntityLoader.class, cachedEntities, dataObjStream, dataObjToDomainObjFunction);
+		GenericEntityLoader<Long, ExampleDO, ExampleDomainObject> el = (GenericEntityLoader<Long, ExampleDO, ExampleDomainObject>) this.applicationContext.getBean(GenericEntityLoader.class, cachedEntities, dataObjStream, dataObjToEntityFunction);
 
 		return el;
 	}
