@@ -1,1 +1,0 @@
-package com.schoste.ddd.domain.v2.services;

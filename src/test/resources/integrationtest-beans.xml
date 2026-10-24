@@ -6,13 +6,13 @@
     http://www.springframework.org/schema/beans
     http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
 
-    <bean id="DomainObjectRepository" class="com.schoste.ddd.domain.v2.services.standard.DomainObjectRepositoryImpl" scope="singleton" />
-	<bean id="DomainObject" class="com.schoste.ddd.domain.v2.models.ExampleDomainObject" scope="prototype" />
-	<bean id="UnitOfWork" class="com.schoste.ddd.domain.v2.services.standard.UnitOfWorkImpl" scope="prototype" />
-	<bean id="AutoObjectConverter" class="com.schoste.ddd.domain.v2.services.standard.SpringAutoObjectConverterImpl" scope="prototype" />
-    <bean id="ExampleDO" class="com.schoste.ddd.domain.v2.dal.models.ExampleDO" scope="prototype" />
-    <bean id="ExampleDAO" class="com.schoste.ddd.domain.v2.dal.services.serialization.ExampleDAOImpl" scope="singleton">
+    <bean id="DomainObjectRepository" class="com.schoste.ddd.domain.v3.services.standard.DomainObjectRepositoryImpl" scope="singleton" />
+	<bean id="DomainObject" class="com.schoste.ddd.domain.v3.models.ExampleDomainObject" scope="prototype" />
+	<bean id="UnitOfWork" class="com.schoste.ddd.domain.v3.services.standard.UnitOfWorkImpl" scope="prototype" />
+	<bean id="AutoObjectConverter" class="com.schoste.ddd.domain.v3.services.standard.SpringAutoObjectConverterImpl" scope="prototype" />
+    <bean id="ExampleDO" class="com.schoste.ddd.domain.v3.dal.models.ExampleDO" scope="prototype" />
+    <bean id="ExampleDAO" class="com.schoste.ddd.domain.v3.dal.services.serialization.ExampleDAOImpl" scope="singleton">
         <constructor-arg value="#{systemProperties['java.io.tmpdir']}/dao-fs-serialization/example" />
     </bean>
-    <bean id="GenericEntityLoader" class="com.schoste.ddd.domain.v2.services.standard.GenericEntityLoaderImpl" scope="prototype" />
+    <bean id="GenericEntityLoader" class="com.schoste.ddd.domain.v3.services.standard.GenericEntityLoaderImpl" scope="prototype" />
 </beans>

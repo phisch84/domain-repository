@@ -1,0 +1,91 @@
+package com.schoste.ddd.domain.v3.models;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+
+import com.schoste.ddd.domain.v3.entities.Entity.State;
+import com.schoste.ddd.domain.v3.services.standard.DomainObjectRepository;
+import com.schoste.ddd.testing.v1.GenericObjectTest;
+
+/**
+ * Asserts that equality is correctly determined for ExampleDomainObject explicitly
+ * and BasicDomainObject implicitly.
+ * 
+ * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ *
+ */
+@ContextConfiguration(locations = { "file:src/test/resources/unittest-beans.xml" })
+@RunWith(SpringJUnit4ClassRunner.class)
+public class ExampleDomainObjectTest extends GenericObjectTest<ExampleDomainObject>
+{
+	@Autowired
+	private DomainObjectRepository repository;
+
+	@Override
+	protected Map<String, Collection<ExampleDomainObject>> getEqualObjects()
+	{
+		Map<String, Collection<ExampleDomainObject>> equalObjectsSet = new HashMap<String, Collection<ExampleDomainObject>>();
+		
+		try
+		{
+			Collection<ExampleDomainObject> equalObjects = new ArrayList<ExampleDomainObject>();
+	
+			ExampleDomainObject equalObject1 = this.repository.createEntity();
+			ExampleDomainObject equalObject2 = this.repository.createEntity();
+			
+			equalObject1.setId(1L);
+			equalObject1.setState(State.Added);
+			equalObject2.setId(1L);
+			equalObject2.setState(State.Detached);
+			
+			equalObjects.add(equalObject1);
+			equalObjects.add(equalObject2);
+			
+			equalObjectsSet.put("equalObjects", equalObjects);
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace(System.err);
+		}
+		
+		return equalObjectsSet;
+	}
+
+	@Override
+	protected Map<String, Collection<ExampleDomainObject>> getNotEqualObjects()
+	{
+		Map<String, Collection<ExampleDomainObject>> notEqualObjectsSet = new HashMap<String, Collection<ExampleDomainObject>>();
+
+		try
+		{
+			Collection<ExampleDomainObject> notEqualObjects = new ArrayList<ExampleDomainObject>();
+	
+			ExampleDomainObject notEqualObject1 = this.repository.createEntity();
+			ExampleDomainObject notEqualObject2 = this.repository.createEntity();
+			
+			notEqualObject1.setId(1L);
+			notEqualObject1.setState(State.Detached);
+			notEqualObject2.setId(2L);
+			notEqualObject2.setState(State.Detached);
+			
+			notEqualObjects.add(notEqualObject1);
+			notEqualObjects.add(notEqualObject2);
+			
+			notEqualObjectsSet.put("notEqualObjects", notEqualObjects);
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace(System.err);
+		}
+
+		return notEqualObjectsSet;
+	}
+
+}

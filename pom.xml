@@ -1,7 +1,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.schoste.ddd.domain</groupId>
-    <artifactId>domain-repository</artifactId>
+    <artifactId>domain-repository3</artifactId>
     <version>3.0.0-SNAPSHOT</version>
     <name>Generic Repository</name>
     <url>https://www.schoste.com/</url>
@@ -31,12 +31,12 @@
     <dependencies>
         <dependency>
             <groupId>com.schoste.ddd.infrastructure</groupId>
-            <artifactId>dao</artifactId>
+            <artifactId>dao4</artifactId>
             <version>${ddd.dao.version}</version>
         </dependency>
         <dependency>
             <groupId>com.schoste.ddd.infrastructure</groupId>
-            <artifactId>dao-fs-serialization</artifactId>
+            <artifactId>dao4-fs-serialization</artifactId>
             <version>${ddd.dao-fs.version}</version>
         </dependency>
 
@@ -48,7 +48,7 @@
         </dependency>
         <dependency>
             <groupId>com.schoste.ddd.infrastructure</groupId>
-            <artifactId>dao</artifactId>
+            <artifactId>dao4</artifactId>
             <version>${ddd.dao.version}</version>
             <classifier>tests</classifier>
             <type>test-jar</type>
@@ -83,7 +83,7 @@
     </dependencies>
 
     <build>
-        <finalName>domain-repository</finalName>
+        <finalName>domain-repository3</finalName>
         <pluginManagement>
             <plugins>
                 <!-- Build and compiler plugin configuration -->

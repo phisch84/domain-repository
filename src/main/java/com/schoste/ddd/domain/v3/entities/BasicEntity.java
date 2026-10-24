@@ -1,0 +1,74 @@
+package com.schoste.ddd.domain.v3.entities;
+
+import java.io.Serializable;
+import java.util.Objects;
+
+/**
+ * Basic entity implementation
+ *
+ * @author Philipp Schosteritsch <s.philipp@schoste.com>
+ *
+ * @param <ID> the data type of the entity's identifier
+ */
+public abstract class BasicEntity<ID extends Serializable> implements Entity<ID>
+{
+	protected ID id;
+	protected State state;
+
+	/**
+	 * Creates a new instance with a detached state and no id (null)
+	 */
+	public BasicEntity()
+	{
+		this.state = State.Detached;
+		this.id = null;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public ID getId() { return this.id; }
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void setId(ID id) { this.id = id; }
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public State getState() { return this.state; }
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@Override
+	public void setState(State state) { this.state = state; }
+	
+	/**
+	 * Returns the id of the instance as hash code
+	 */
+	@Override
+	public int hashCode()
+	{
+		return Objects.hashCode(this.id);
+	}
+	
+	/**
+	 * Compares two instances by comparing the id of them
+	 */
+	@Override
+	public boolean equals(Object obj)
+	{
+		if (this == obj) return true;
+		if (obj == null) return false;
+		if (getClass() != obj.getClass()) return false;
+
+		BasicEntity<?> other = (BasicEntity<?>) obj;
+
+		return Objects.equals(this.id, other.id);
+	}
+}
