@@ -251,23 +251,18 @@ public class UnitOfWorkImpl implements UnitOfWork
 			for (GenericRepositoryImpl<?,?,?> repository : this.changeLogs.keySet())
 			{
 				RepositoryChangeLog changeLog = this.changeLogs.get(repository);
-	
-				synchronized (changeLog.getObjectsToRemove())
+
+				// the storage is the gold source: the repository forgets the changed entities instead of restoring them in memory
+				for (Collection<Object> changedObjects : Arrays.asList(changeLog.getObjectsToRemove(), changeLog.getObjectsToAdd(), changeLog.getObjectsToUpdate()))
 				{
-					for (Object objToRemove : changeLog.getObjectsToRemove()) repository.add(objToRemove);
+					synchronized (changedObjects)
+					{
+						for (Object changedObject : changedObjects) repository.forget(changedObject);
 
-					objectsToRollBack.addAll(changeLog.getObjectsToRemove());
+						objectsToRollBack.addAll(changedObjects);
 
-					changeLog.getObjectsToRemove().clear();
-				}
-				
-				synchronized (changeLog.getObjectsToAdd())
-				{
-					for (Object objToAdd : changeLog.getObjectsToAdd()) repository.remove(objToAdd);
-					
-					objectsToRollBack.addAll(changeLog.getObjectsToAdd());
-
-					changeLog.getObjectsToAdd().clear();
+						changedObjects.clear();
+					}
 				}
 			}
 
