@@ -104,4 +104,19 @@ public interface Entity<ID extends Serializable>
 	 * @param state the entity's state
 	 */
 	public void setState(State state);
+
+	/**
+	 * Checks if another entity represents the same entity of the domain, i.e. it is of the same class and has the same id.
+	 * Use this method instead of {@link Object#equals(Object)} to compare entities by their id: {@link BasicEntity} uses identity
+	 * for {@link Object#equals(Object)}, since the id of an entity changes when it is persisted.
+	 *
+	 * @param other the entity to compare with
+	 * @return true if both entities are of the same class and have the same id; false if other is null or one of the ids is null
+	 */
+	public default boolean isSameEntityAs(Entity<ID> other)
+	{
+		if ((other == null) || (this.getId() == null) || (this.getClass() != other.getClass())) return false;
+
+		return this.getId().equals(other.getId());
+	}
 }

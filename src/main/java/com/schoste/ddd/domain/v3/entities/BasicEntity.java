@@ -1,10 +1,15 @@
 package com.schoste.ddd.domain.v3.entities;
 
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * Basic entity implementation
+ *
+ * Entities are only equal to themselves ({@link Object#equals(Object)} and {@link Object#hashCode()} aren't overridden), because
+ * their id changes while they are used: committing a new entity replaces its virtual id with the actual one, and the repository
+ * and the Units of Work keep entities in hash-based collections. Use {@link Entity#isSameEntityAs(Entity)} to compare entities by
+ * their id. A subclass may override {@link Object#equals(Object)} and {@link Object#hashCode()} itself, but only based on fields which
+ * never change while the entity is used.
  *
  * @author Philipp Schosteritsch <s.philipp@schoste.com>
  *
@@ -47,28 +52,4 @@ public abstract class BasicEntity<ID extends Serializable> implements Entity<ID>
 	 */
 	@Override
 	public void setState(State state) { this.state = state; }
-	
-	/**
-	 * Returns the id of the instance as hash code
-	 */
-	@Override
-	public int hashCode()
-	{
-		return Objects.hashCode(this.id);
-	}
-	
-	/**
-	 * Compares two instances by comparing the id of them
-	 */
-	@Override
-	public boolean equals(Object obj)
-	{
-		if (this == obj) return true;
-		if (obj == null) return false;
-		if (getClass() != obj.getClass()) return false;
-
-		BasicEntity<?> other = (BasicEntity<?>) obj;
-
-		return Objects.equals(this.id, other.id);
-	}
 }
