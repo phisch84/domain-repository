@@ -316,6 +316,11 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 * After the refresh, {@link RepositoryChangeListener#onRefreshed(GenericRepository, Collection, Collection)} is called for the
 	 * repository's listeners, even if nothing was refreshed.
 	 *
+	 * If the refresh fails part-way, the entities refreshed so far stay refreshed. If an entity's data object can't be converted,
+	 * the entity may have been updated partially, so it is forgotten (state Detached). The exception is thrown, and the listeners
+	 * aren't notified. Since the time stamps of the entities which haven't been refreshed are unchanged, a later call of this method
+	 * picks them up.
+	 *
 	 * @return the affected entities: the refreshed ones, which have the state Unchanged, and the forgotten ones, which have the
 	 * state Detached. The collection is empty if nothing was refreshed; callers which don't need it can ignore it.
 	 * @throws DALException re-throws exceptions from the data access layer
@@ -336,6 +341,9 @@ public interface GenericRepository<ID extends Serializable, E extends Entity<ID>
 	 *
 	 * After the refresh, {@link RepositoryChangeListener#onRefreshed(GenericRepository, Collection, Collection)} is called for the
 	 * repository's listeners.
+	 *
+	 * If the data object can't be converted, the entity may have been updated partially, so it is forgotten (state Detached),
+	 * a {@link DomainException} is thrown, and the listeners aren't notified.
 	 *
 	 * @param entity the entity to refresh
 	 * @throws IllegalArgumentException thrown if the parameter entity is null, or if a different instance with the same id is known to the repository

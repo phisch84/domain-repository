@@ -244,6 +244,9 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 		this.getDataAccessObject().clear();
 		this.getRepository().reset();
 		this.getDataAccessObject().resetStatistics();
+
+		// a test which failed before the conversion must not leave the failure to the next test
+		this.failNextConversion(null);
 	}
 
 	@Before
@@ -1857,5 +1860,441 @@ public abstract class GenericRepositoryContractTest<ID extends Serializable, E e
 		this.addEntity();
 
 		Assert.assertTrue(this.listener.isEmpty());
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+	// refresh()
+	// ---------------------------------------------------------------------------------------------------------------
+
+	/**
+	 * Arranges a known Unchanged entity loaded from a data object with a given modification time stamp
+	 *
+	 * @param modifiedTimeStamp the modification time stamp of the data object
+	 * @return the loaded entity
+	 * @throws Exception re-throws every exception
+	 */
+	protected E loadEntity(long modifiedTimeStamp) throws Exception
+	{
+		return this.getRepository().get(this.seedDataObject(modifiedTimeStamp).getId());
+	}
+
+	/**
+	 * H1: without known Unchanged entities, nothing is refreshed and the DAO isn't queried; the listeners are notified anyway.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_noKnownUnchangedEntities_returnsEmptyWithoutQuery() throws Exception
+	{
+		this.addEntity();
+		this.seedDataObject(AFTER_LAST_MODIFICATION);
+		this.getDataAccessObject().resetStatistics();
+
+		Assert.assertTrue(this.getRepository().refresh().isEmpty());
+		Assert.assertTrue(this.getQueriedMethods().isEmpty());
+		Assert.assertEquals(1, this.listener.getRefreshNotifications());
+	}
+
+	/**
+	 * H2: a known Unchanged entity whose data object was modified in the storage gets the new values in place.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_unchangedEntityModifiedInStorage_updatesSameInstance() throws Exception
+	{
+		E entity = this.loadEntity(BEFORE_LAST_MODIFICATION);
+		DO changedDataObject = this.seedDataObject(entity.getId(), false, true, AFTER_LAST_MODIFICATION);
+
+		this.getDataAccessObject().resetStatistics();
+
+		Collection<E> affected = this.getRepository().refresh();
+
+		Assert.assertEquals(1, affected.size());
+		Assert.assertTrue(containsSame(affected, entity));
+		Assert.assertEquals(Entity.State.Unchanged, entity.getState());
+		Assert.assertTrue(this.hasValuesOf(entity, changedDataObject));
+		Assert.assertSame(entity, this.getRepository().get(entity.getId()));
+		Assert.assertEquals(Arrays.asList("getRecent"), this.getQueriedMethods());
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getRefreshed());
+	}
+
+	/**
+	 * H3: a known Unchanged entity whose data object wasn't modified isn't affected.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_unchangedEntityNotModified_isNotAffected() throws Exception
+	{
+		this.loadEntity(BEFORE_LAST_MODIFICATION);
+
+		Assert.assertTrue(this.getRepository().refresh().isEmpty());
+		Assert.assertTrue(this.listener.getRefreshed().isEmpty());
+	}
+
+	/**
+	 * H4: a known Unchanged entity whose data object is flagged deleted is forgotten.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_dataObjectFlaggedDeleted_forgetsEntity() throws Exception
+	{
+		E entity = this.loadEntity(BEFORE_LAST_MODIFICATION);
+
+		this.seedDataObject(entity.getId(), true, false, AFTER_LAST_MODIFICATION);
+
+		Collection<E> affected = this.getRepository().refresh();
+
+		Assert.assertTrue(containsSame(affected, entity));
+		Assert.assertEquals(Entity.State.Detached, entity.getState());
+		Assert.assertNull(this.getRepository().get(entity.getId()));
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getForgotten());
+	}
+
+	/**
+	 * H5: Modified entities are skipped; their local changes take precedence.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_modifiedEntity_isSkipped() throws Exception
+	{
+		DO dataObject = this.seedDataObject(BEFORE_LAST_MODIFICATION);
+		E entity = this.getRepository().get(dataObject.getId());
+
+		this.getRepository().setModified(entity);
+		this.seedDataObject(entity.getId(), false, true, AFTER_LAST_MODIFICATION);
+
+		Assert.assertTrue(this.getRepository().refresh().isEmpty());
+		Assert.assertEquals(Entity.State.Modified, entity.getState());
+		Assert.assertTrue(this.hasValuesOf(entity, dataObject));
+	}
+
+	/**
+	 * H6: data objects without a known entity are ignored; they aren't loaded.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_dataObjectWithoutKnownEntity_isIgnored() throws Exception
+	{
+		this.loadEntity(BEFORE_LAST_MODIFICATION);
+
+		DO dataObject = this.seedDataObject(AFTER_LAST_MODIFICATION);
+
+		Assert.assertTrue(this.getRepository().refresh().isEmpty());
+		Assert.assertFalse(this.isCached(dataObject.getId()));
+	}
+
+	/**
+	 * H7: each entity is compared with the time stamp of the data object it was loaded from: a modification between the load times
+	 * of two entities refreshes the older entity only.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_entitiesLoadedFromDifferentTimeStamps_refreshesOnlyNewerDataObjects() throws Exception
+	{
+		E older = this.loadEntity(BEFORE_LAST_MODIFICATION);
+		E newer = this.loadEntity(AFTER_LAST_MODIFICATION + 1000);
+
+		this.seedDataObject(older.getId(), false, true, AFTER_LAST_MODIFICATION);
+
+		Collection<E> affected = this.getRepository().refresh();
+
+		Assert.assertEquals(1, affected.size());
+		Assert.assertTrue(containsSame(affected, older));
+		Assert.assertFalse(containsSame(affected, newer));
+	}
+
+	/**
+	 * H8: a refreshed entity isn't refreshed again by the next call, unless its data object is modified again.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_calledTwice_doesNotRefreshAgain() throws Exception
+	{
+		E entity = this.loadEntity(BEFORE_LAST_MODIFICATION);
+
+		this.seedDataObject(entity.getId(), false, true, AFTER_LAST_MODIFICATION);
+
+		Assert.assertEquals(1, this.getRepository().refresh().size());
+		Assert.assertTrue(this.getRepository().refresh().isEmpty());
+	}
+
+	/**
+	 * H9: an entity committed by a Unit of Work is refreshed later, since the time stamp of its data object is recorded on commit.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_committedEntity_isRefreshedLater() throws Exception
+	{
+		E entity;
+
+		// the Unit of Work only records changes made while it is registered with the repository
+		try (UnitOfWorkImpl uow = new UnitOfWorkImpl(this.getRepositoryImpl()))
+		{
+			entity = this.addEntity();
+
+			uow.commit();
+		}
+
+		Assert.assertEquals(Entity.State.Unchanged, entity.getState());
+
+		this.seedDataObject(entity.getId(), false, true, Long.MAX_VALUE / 2);
+
+		Assert.assertTrue(containsSame(this.getRepository().refresh(), entity));
+	}
+
+	/**
+	 * H10: the DAO's own most recent modification time stamp isn't changed, so other users of a shared DAO aren't affected.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_sharedDataAccessObject_keepsItsTimeStamp() throws Exception
+	{
+		E entity = this.loadEntity(BEFORE_LAST_MODIFICATION);
+
+		this.seedDataObject(entity.getId(), false, true, AFTER_LAST_MODIFICATION);
+		this.getDataAccessObject().setLastModifiedTimeStamp(LAST_MODIFICATION);
+
+		this.getRepository().refresh();
+
+		Assert.assertEquals(LAST_MODIFICATION, this.getDataAccessObject().getLastModifiedTimeStamp());
+	}
+
+	/**
+	 * H11: if a conversion fails, the entity is forgotten, the exception is thrown, and the listeners aren't notified.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_conversionFails_forgetsEntityAndThrows() throws Exception
+	{
+		E entity = this.loadEntity(BEFORE_LAST_MODIFICATION);
+		RuntimeException failure = new RuntimeException("test");
+
+		this.seedDataObject(entity.getId(), false, true, AFTER_LAST_MODIFICATION);
+		this.failNextConversion(failure);
+
+		try
+		{
+			this.getRepository().refresh();
+
+			Assert.fail();
+		}
+		catch (DomainException e)
+		{
+			Assert.assertSame(failure, e.getCause());
+			Assert.assertEquals(Entity.State.Detached, entity.getState());
+			Assert.assertNotSame(entity, this.getRepository().get(entity.getId()));
+			Assert.assertEquals(0, this.listener.getRefreshNotifications());
+		}
+	}
+
+	/**
+	 * H12: a failure of the DAO is thrown as {@link DALException}.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refresh_daoFails_throwsDALException() throws Exception
+	{
+		this.loadEntity(BEFORE_LAST_MODIFICATION);
+
+		DALException failure = new DALException();
+
+		this.getDataAccessObject().failNextQuery(failure);
+
+		try
+		{
+			this.getRepository().refresh();
+
+			Assert.fail();
+		}
+		catch (DALException e)
+		{
+			Assert.assertSame(failure, e);
+		}
+	}
+
+	/**
+	 * H12: a failure of the DAO's stream is thrown as {@link DALException} as well, since refresh() isn't a stream method.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = DALException.class)
+	public void refresh_daoStreamFails_throwsDALException() throws Exception
+	{
+		E entity = this.loadEntity(BEFORE_LAST_MODIFICATION);
+
+		this.seedDataObject(entity.getId(), false, true, AFTER_LAST_MODIFICATION);
+		this.getDataAccessObject().failNextStream(new IllegalStateException("test"));
+
+		this.getRepository().refresh();
+	}
+
+	// ---------------------------------------------------------------------------------------------------------------
+	// refresh(E)
+	// ---------------------------------------------------------------------------------------------------------------
+
+	/**
+	 * E1: null isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void refreshEntity_null_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().refresh((E) null);
+	}
+
+	/**
+	 * E2: a known Unchanged entity gets the values of its data object in place, regardless of time stamps.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refreshEntity_unchangedEntity_updatesSameInstanceRegardlessOfTimeStamps() throws Exception
+	{
+		E entity = this.loadEntity(AFTER_LAST_MODIFICATION);
+		DO changedDataObject = this.seedDataObject(entity.getId(), false, true, BEFORE_LAST_MODIFICATION);
+
+		this.getDataAccessObject().resetStatistics();
+		this.getRepository().refresh(entity);
+
+		Assert.assertEquals(Entity.State.Unchanged, entity.getState());
+		Assert.assertTrue(this.hasValuesOf(entity, changedDataObject));
+		Assert.assertSame(entity, this.getRepository().get(entity.getId()));
+		Assert.assertEquals(Arrays.asList("get(id)"), this.getQueriedMethods());
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getRefreshed());
+	}
+
+	/**
+	 * E3: an entity whose data object doesn't exist anymore is forgotten.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refreshEntity_dataObjectMissing_forgetsEntity() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.getDataAccessObject().delete(entity.getId());
+		this.getRepository().refresh(entity);
+
+		Assert.assertEquals(Entity.State.Detached, entity.getState());
+		Assert.assertFalse(this.isCached(entity.getId()));
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getForgotten());
+	}
+
+	/**
+	 * E4: an entity whose data object is flagged deleted is forgotten.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refreshEntity_dataObjectFlaggedDeleted_forgetsEntity() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.seedDataObject(entity.getId(), true, false, null);
+		this.getRepository().refresh(entity);
+
+		Assert.assertEquals(Entity.State.Detached, entity.getState());
+		Assert.assertNull(this.getRepository().get(entity.getId()));
+		Assert.assertEquals(Arrays.asList(entity), this.listener.getForgotten());
+	}
+
+	/**
+	 * E5: an Added, Modified or Deleted entity isn't accepted; its local changes would be lost.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refreshEntity_notUnchanged_throwsIllegalState() throws Exception
+	{
+		E added = this.addEntity();
+		E modified = this.loadEntity();
+		E deleted = this.loadEntity();
+
+		this.getRepository().setModified(modified);
+		this.getRepository().remove(deleted);
+
+		for (E entity : Arrays.asList(added, modified, deleted))
+		{
+			Entity.State state = entity.getState();
+
+			try
+			{
+				this.getRepository().refresh(entity);
+
+				Assert.fail(state.toString());
+			}
+			catch (IllegalStateException e)
+			{
+				Assert.assertEquals(state, entity.getState());
+			}
+		}
+
+		Assert.assertEquals(0, this.listener.getRefreshNotifications());
+	}
+
+	/**
+	 * E6: an entity unknown to the repository isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalStateException.class)
+	public void refreshEntity_unknownEntity_throwsIllegalState() throws Exception
+	{
+		E entity = this.loadEntity();
+
+		this.simulateGc(entity.getId());
+		this.getRepository().refresh(entity);
+	}
+
+	/**
+	 * E7: a different instance with the id of a known entity isn't accepted.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void refreshEntity_twin_throwsIllegalArgument() throws Exception
+	{
+		this.getRepository().refresh(this.createTwin());
+	}
+
+	/**
+	 * E8: if the conversion fails, the entity is forgotten, a {@link DomainException} is thrown, and the listeners aren't notified.
+	 *
+	 * @throws Exception re-throws every exception
+	 */
+	@Test
+	public void refreshEntity_conversionFails_forgetsEntityAndThrows() throws Exception
+	{
+		E entity = this.loadEntity();
+		RuntimeException failure = new RuntimeException("test");
+
+		this.failNextConversion(failure);
+
+		try
+		{
+			this.getRepository().refresh(entity);
+
+			Assert.fail();
+		}
+		catch (DomainException e)
+		{
+			Assert.assertSame(failure, e.getCause());
+			Assert.assertEquals(Entity.State.Detached, entity.getState());
+			Assert.assertFalse(this.isCached(entity.getId()));
+			Assert.assertEquals(0, this.listener.getRefreshNotifications());
+		}
 	}
 }

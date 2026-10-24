@@ -7,8 +7,10 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -46,6 +48,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	protected Set<RepositoryChangeListener> changeListener = new HashSet<RepositoryChangeListener>();
 	protected Map<ID, WeakReference<E>> loadedEntities = new HashMap<ID, WeakReference<E>>();
 	protected Map<ID, WeakReference<E>> pendingRemovals = new HashMap<ID, WeakReference<E>>();
+	protected Map<ID, Long> loadedTimeStamps = new HashMap<ID, Long>();
 
 	private void notifyObjectAdded(E entity)
 	{
@@ -84,6 +87,21 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 			synchronized (this.changeListener)
 			{
 				for (RepositoryChangeListener listener : this.changeListener) listener.onObjectModified(this, entity);
+			}
+		}
+		catch (Exception e)
+		{
+			System.err.println(e.getMessage());
+		}
+	}
+
+	private void notifyObjectsRefreshed(Collection<Object> refreshedObjects, Collection<Object> forgottenObjects)
+	{
+		try
+		{
+			synchronized (this.changeListener)
+			{
+				for (RepositoryChangeListener listener : this.changeListener) listener.onRefreshed(this, refreshedObjects, forgottenObjects);
 			}
 		}
 		catch (Exception e)
@@ -273,6 +291,7 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	 * Creates a new entity from a data object.
 	 * The returned entity is supposed to have the state Unchanged on return and must be cached by this repository
 	 * so that the contracts of the repository's get() methods still hold.
+	 * The modification time stamp of the data object is recorded for {@link GenericRepositoryImpl#refresh()}.
 	 *
 	 * @param dataObject the data object as source
 	 * @param entity an existing entity to update with the provided data object. If null, a new one will be created
@@ -293,9 +312,11 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 		
 		entity.setId(dataObject.getId());
 		entity.setState(State.Unchanged);
-		
+
 		if (existed) this.loadedEntities.put(entity.getId(), new WeakReference<E>(entity));
-		
+
+		this.loadedTimeStamps.put(entity.getId(), dataObject.getModifiedTimeStamp());
+
 		return entity;
 	}
 
@@ -857,17 +878,93 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	/**
 	 * {@inheritDoc}
 	 *
-	 * Implementation plan (draft): when an entity is created from a data object or refreshed, the repository records the data
-	 * object's modification time stamp ({@link GenericDataObject#getModifiedTimeStamp()}) per id. The oldest recorded time stamp of
-	 * the known Unchanged entities is passed to {@link GenericDataAccessObject#getRecent(long, boolean)}; a reported data object
-	 * refreshes its entity only if its time stamp is greater than the recorded one. Entities are updated in place by
-	 * {@link GenericRepositoryImpl#dataObjectToDomainObject(GenericDataObject, Entity)} and forgotten by
-	 * {@link GenericRepositoryImpl#forget(Entity)}. The recorded time stamps are dropped together with the cache entries.
+	 * When an entity is created from a data object or refreshed, {@link GenericRepositoryImpl#dataObjectToDomainObject(GenericDataObject, Entity)}
+	 * records the data object's modification time stamp ({@link GenericDataObject#getModifiedTimeStamp()}) per id. The oldest recorded
+	 * time stamp of the known Unchanged entities is passed to {@link GenericDataAccessObject#getRecent(long, boolean)}; a reported data
+	 * object refreshes its entity only if its time stamp is greater than the recorded one.
 	 */
 	@Override
 	public Collection<E> refresh() throws DALException, DomainException
 	{
-		throw new UnsupportedOperationException("refresh() is not implemented yet");
+		Map<ID, E> unchangedEntities = new HashMap<>();
+		long oldestTimeStamp = Long.MAX_VALUE;
+
+		synchronized (this)
+		{
+			for (WeakReference<E> entityRef : this.loadedEntities.values())
+			{
+				E entity = (entityRef == null) ? null : entityRef.get();
+
+				if ((entity == null) || (entity.getState() != State.Unchanged)) continue;
+
+				unchangedEntities.put(entity.getId(), entity);
+				oldestTimeStamp = Math.min(oldestTimeStamp, this.getLoadedTimeStamp(entity.getId()));
+			}
+		}
+
+		Collection<E> affectedEntities = new ArrayList<>();
+		Collection<Object> refreshedObjects = new ArrayList<>();
+		Collection<Object> forgottenObjects = new ArrayList<>();
+
+		if (!unchangedEntities.isEmpty())
+		{
+			try (Stream<DO> dataObjStream = this.getDataAccessObject().getRecent(oldestTimeStamp, true))
+			{
+				Iterator<DO> dataObjIterator = dataObjStream.iterator();
+
+				while (true)
+				{
+					DO dataObject;
+
+					// refresh() isn't a stream method, so failures of the DAO's stream are thrown as DALException
+					try
+					{
+						if (!dataObjIterator.hasNext()) break;
+
+						dataObject = dataObjIterator.next();
+					}
+					catch (DALRuntimeException e)
+					{
+						throw e.getCause();
+					}
+					catch (RuntimeException e)
+					{
+						throw new DALException(e);
+					}
+
+					E entity = (dataObject == null) ? null : unchangedEntities.get(dataObject.getId());
+
+					if (entity == null) continue;
+
+					synchronized (this)
+					{
+						// the entity may have been changed, removed or forgotten in the meantime
+						if ((entity.getState() != State.Unchanged) || (this.getCachedEntity(entity.getId()) != entity)) continue;
+
+						if (dataObject.getIsDeleted())
+						{
+							this.forget(entity);
+
+							forgottenObjects.add(entity);
+						}
+						else
+						{
+							if (dataObject.getModifiedTimeStamp() <= this.getLoadedTimeStamp(entity.getId())) continue;
+
+							this.refreshEntity(dataObject, entity);
+
+							refreshedObjects.add(entity);
+						}
+
+						affectedEntities.add(entity);
+					}
+				}
+			}
+		}
+
+		this.notifyObjectsRefreshed(refreshedObjects, forgottenObjects);
+
+		return affectedEntities;
 	}
 
 	/**
@@ -876,7 +973,61 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 	@Override
 	public void refresh(E entity) throws IllegalArgumentException, IllegalStateException, DALException, DomainException
 	{
-		throw new UnsupportedOperationException("refresh(E) is not implemented yet");
+		if (entity == null) throw new IllegalArgumentException("entity");
+
+		E cachedEntity = this.getCachedEntity(entity.getId());
+
+		if ((cachedEntity != null) && (cachedEntity != entity)) throw new IllegalArgumentException("entity"); // a different instance with the same id is known
+		if (cachedEntity == null) throw new IllegalStateException("entity is unknown to the repository");
+		if (entity.getState() != State.Unchanged) throw new IllegalStateException(String.format("state %s", entity.getState()));
+
+		DO dataObject = this.getDataAccessObject().get(entity.getId());
+
+		if ((dataObject == null) || dataObject.getIsDeleted())
+		{
+			this.forget(entity);
+			this.notifyObjectsRefreshed(Collections.emptyList(), Collections.singletonList(entity));
+
+			return;
+		}
+
+		this.refreshEntity(dataObject, entity);
+		this.notifyObjectsRefreshed(Collections.singletonList(entity), Collections.emptyList());
+	}
+
+	/**
+	 * Gets the modification time stamp of the data object the entity of an id was loaded or last refreshed from
+	 *
+	 * @param id the id of the entity
+	 * @return the recorded time stamp, or 0 if none was recorded (then every modification counts as newer)
+	 */
+	protected synchronized long getLoadedTimeStamp(ID id)
+	{
+		Long timeStamp = this.loadedTimeStamps.get(id);
+
+		return (timeStamp == null) ? 0L : timeStamp;
+	}
+
+	/**
+	 * Updates an entity in place with the values of its data object.
+	 * If the conversion fails, the entity may have been updated partially, so it is forgotten.
+	 *
+	 * @param dataObject the data object with the new values
+	 * @param entity the entity to update
+	 * @throws DomainException thrown if the data object couldn't be converted
+	 */
+	protected synchronized void refreshEntity(DO dataObject, E entity) throws DomainException
+	{
+		try
+		{
+			this.dataObjectToDomainObject(dataObject, entity);
+		}
+		catch (Exception e)
+		{
+			this.forget(entity);
+
+			throw new DomainException(e);
+		}
 	}
 
 	/**
@@ -923,7 +1074,11 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 		WeakReference<E> entityRef = this.loadedEntities.get(entity.getId());
 
-		if ((entityRef != null) && (entityRef.get() == entity)) this.loadedEntities.remove(entity.getId());
+		if ((entityRef != null) && (entityRef.get() == entity))
+		{
+			this.loadedEntities.remove(entity.getId());
+			this.loadedTimeStamps.remove(entity.getId());
+		}
 
 		entityRef = this.pendingRemovals.get(entity.getId());
 
@@ -968,5 +1123,6 @@ abstract public class GenericRepositoryImpl<ID extends Serializable, E extends E
 
 		this.loadedEntities.clear();
 		this.pendingRemovals.clear();
+		this.loadedTimeStamps.clear();
 	}
 }
