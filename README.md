@@ -28,7 +28,8 @@ Javadoc jar (`javadoc` classifier). It needs `dao4` and one of its storages:
 ```
 
 The major version is part of both the artifact id and the package name (`com.schoste.ddd.domain.v3`), so version 3 can be used
-side by side with version 2 (`domain-repository`, package `….domain.v2`) while a project migrates.
+side by side with the older versions (`domain-repository` 1.x and 2.x, which share the package `….domain.v1`) while a project
+migrates; see [Migrating from Domain Repository 1.x and 2.x](#migrating-from-domain-repository-1x-and-2x).
 
 The library is compiled for Java 8 and doesn't need Spring: every class can be created with `new`. Spring can still create and
 inject repositories, entities and converters (override the methods listed under [Writing a repository](#writing-a-repository)).
@@ -171,6 +172,44 @@ try (UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(customers))
 
 A Unit of Work can also serve several repositories: `new UnitOfWorkImpl(Arrays.asList(customers, orders))` commits them in
 this order.
+
+## Migrating from Domain Repository 1.x and 2.x
+
+The old versions (artifact `domain-repository`, package `com.schoste.ddd.domain.v1`, on DAO 2.x/3.x) and version 3 (on DAO 4)
+can be on the class path at the same time. Migrate the DAOs as well; the [DAO 4 README](https://github.com/phisch84/dao)
+has its own migration section.
+
+**Behavior that changed without a compile error** – check these first:
+
+- **Entities are only equal to themselves.** The old `BasicDomainObject` compared ids in `equals`/`hashCode`. Now, where the
+  code means "the same entity", use `isSameEntityAs(other)` (same class and id). Remove own `equals`/`hashCode` overrides
+  which use the id: the id of a new entity changes when it is committed, and the repository keeps entities in hash-based
+  collections. `equals` may still be overridden for a logical equality, but only on fields which never change.
+- **Every new entity gets a unique virtual id from the DAO** (e.g. `-1`, `-2`, …) instead of an id of the repository;
+  `isVirtualId(id)` tells whether it has been committed.
+- **`getAll` returns a stream which must be closed**, instead of a collection: `try (Stream<E> all = repository.getAll(false)) { … }`.
+- **Only registered changes are committed**, as before: tell the repository with `add`, `remove` and `setModified`; setting the
+  state of an entity yourself registers nothing.
+- **The repository doesn't need Spring anymore.** The old one got the application context and the converter injected; to
+  keep creating entities and converters as Spring beans, override `doCreateEntity` and `getAutoObjectConverter` (see
+  [Writing a repository](#writing-a-repository)).
+
+**Mapping:**
+
+| Old (`domain.v1`) | New (`domain.v3`) |
+|---|---|
+| `models.DomainObject`, `models.BasicDomainObject` | `entities.Entity<ID>`, `entities.BasicEntity<ID>` |
+| `DomainObject.State` | `Entity.State` |
+| `annotations.AutoSet` | `annotations.AutoSet` (same attributes) |
+| `services.GenericRepository<T, DO>` | `services.GenericRepository<ID, E, DO>` |
+| `services.standard.GenericRepositoryImpl<T, DO>` | `services.standard.GenericRepositoryImpl<ID, E, DO>` |
+| `createObject()` | `createEntity()`; customize creation by overriding `doCreateEntity(Class, Object...)` |
+| `get(int)` | `get(ID)`; several at once: `get(Collection<ID>)` returning a `Stream` |
+| `getAll()` returning a `Collection`, `getAll(Predicate)` | `getAll(boolean recentOnly)` returning a `Stream` (filter it yourself) |
+| `reload()` | `refresh()` updates the cached entities from the storage (Unchanged ones in place, Modified ones are skipped, ones whose data object is flagged deleted are forgotten); `reset()` forgets all entities and removes all listeners, including Units of Work (see its Javadoc) |
+| `afterAutoConversation(DO, T)` / `afterAutoConversation(T, DO)` | `doCompleteEntity(DO, E)` / `doCompleteDataObject(E, DO)` |
+| `getDomainObjectClass()` | `getEntityClass()` |
+| `DALException` (from DAO 2.x/3.x) | `DAOException` (from DAO 4); conversion failures in streams: `DataObjectConversionException` |
 
 ## Building
 
