@@ -57,7 +57,8 @@ inject repositories, entities and converters (override the methods listed under 
 - **Streams must be closed.** `get(Collection)` and `getAll(boolean)` return lazy streams; close them, e.g. with try-with-resources.
 - **Change tracking:** `getAll(true)` provides the known entities and the ones whose data objects changed since its last call.
   Each repository tracks this on its own, so repositories sharing a DAO don't affect each other.
-- **A commit isn't a transaction.** If it fails part-way, the changes written so far stay written.
+- **A commit is only a transaction with a transaction manager.** Without one, a commit which fails part-way leaves the changes
+  written so far written. See [Transactions](#transactions).
 - **Closing a Unit of Work rolls back** what hasn't been committed; a rollback makes the repositories forget the changed
   entities, so the next get loads them from the storage again.
 - **Null arguments** are rejected with `IllegalArgumentException`.
@@ -172,6 +173,51 @@ try (UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(customers))
 
 A Unit of Work can also serve several repositories: `new UnitOfWorkImpl(Arrays.asList(customers, orders))` commits them in
 this order.
+
+## Transactions
+
+A commit writes its changes by several DAO calls, so without a transaction it isn't atomic. A `DomainTransactionManager` wraps
+the transactions of the storage (`DAOTransactionManager` of `dao4`, e.g. `HibernateDAOTransactionManager`) and keeps the
+repositories consistent with the storage when a transaction is rolled back:
+
+```java
+DomainTransactionManager transactions = new DomainTransactionManagerImpl(new HibernateDAOTransactionManager(sessionFactory));
+```
+
+**One atomic commit:** a Unit of Work with a transaction manager stores all changes of a commit or none. If the commit fails,
+it acts like `rollback()` for all its changes, also for the ones it had written already.
+
+```java
+UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(Arrays.asList(customers, orders), transactions);
+// or: unitOfWork.setTransactionManager(transactions), e.g. as a property of a Spring bean
+```
+
+**Several commits in one transaction:** e.g. when a child needs the actual id of its parent, which it only gets by a commit.
+
+```java
+try (DomainTransaction transaction = transactions.begin())
+{
+    customers.add(customer);
+    unitOfWork.commit();                    // customer gets its actual id; the storage keeps the change open
+
+    order.setCustomerId(customer.getId());
+    orders.add(order);
+    unitOfWork.commit();
+
+    transaction.commit();                   // stores both commits; without it, closing rolls both back
+}
+```
+
+- A transaction belongs to the thread which began it; all commits of Units of Work in that thread join it, also of Units of
+  Work without a transaction manager. Reads of the repositories see the changes made in it.
+- If the transaction is rolled back, or a commit in it fails, the storage discards all changes of the transaction, and the
+  repositories forget the entities committed in it, as `rollback()` does: they become `Detached`, and getting them again provides
+  new instances with the state of the storage (none for entities which had been added).
+- `begin()` on a thread which has a transaction already joins it (an *inner* transaction): only the outermost one commits;
+  rolling back an inner one forgets its entities and marks the whole transaction for rollback. So a method can use a
+  transaction regardless of whether its caller has one.
+- Listeners of the Units of Work are notified on each commit, also if the transaction is rolled back later.
+- The storage must support transactions: the Hibernate DAOs of `dao4` do, the file system and serialization DAOs don't.
 
 ## Migrating from Domain Repository 1.x and 2.x
 

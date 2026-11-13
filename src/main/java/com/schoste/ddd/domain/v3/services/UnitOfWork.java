@@ -26,8 +26,10 @@ public interface UnitOfWork extends RepositoryChangeListener
 	 * <li>modified entities are saved; they get the state Unchanged;</li>
 	 * <li>the data objects of removed entities are deleted (see {@code DAO.delete(DataObject)}); the entities get the state Detached.</li>
 	 * </ul>
-	 * The commit isn't atomic: it isn't a transaction across DAOs or repositories. If it fails part-way, the changes written
-	 * so far stay written, and the changes which haven't been written yet stay recorded.
+	 * By itself, the commit isn't atomic: it isn't a transaction across DAOs or repositories. If it fails part-way, the changes written
+	 * so far stay written, and the changes which haven't been written yet stay recorded. Transactions ({@link DomainTransactionManager})
+	 * make it atomic, also together with other commits; implementations say how they use them (see
+	 * {@code UnitOfWorkImpl.setTransactionManager(DomainTransactionManager)}).
 	 *
 	 * @throws DAOException re-throws exceptions from the DAOs
 	 * @throws DomainException re-throws every other exception as {@link DomainException}

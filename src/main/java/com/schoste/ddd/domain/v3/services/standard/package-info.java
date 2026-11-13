@@ -3,7 +3,8 @@
  *
  * To create a repository, extend {@link com.schoste.ddd.domain.v3.services.standard.GenericRepositoryImpl} and implement its only
  * abstract method, {@code getDataAccessObject()}. Use {@link com.schoste.ddd.domain.v3.services.standard.UnitOfWorkImpl} to commit
- * the changes of one or more repositories. Spring is optional: all classes can be created with {@code new}.
+ * the changes of one or more repositories, and {@link com.schoste.ddd.domain.v3.services.standard.DomainTransactionManagerImpl} for
+ * transactions which make commits atomic. Spring is optional: all classes can be created with {@code new}.
  *
  * Example for the entity {@code Customer}, its data object {@code CustomerDO} and a DAO of the {@code dao4} library:
  * <pre>
