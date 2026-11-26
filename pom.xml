@@ -3,8 +3,40 @@
     <groupId>com.schoste.ddd.domain</groupId>
     <artifactId>domain-repository3</artifactId>
     <version>3.0.0-SNAPSHOT</version>
-    <name>Generic Repository</name>
-    <url>https://www.schoste.com/</url>
+    <name>Domain Repository 3</name>
+    <description>
+        Domain Repository 3: repositories which create, provide and track the entities of an application, and Units of Work
+        which write their changes to a storage, through a DAO of the DAO 4 library (dao4). Java 8 and later, no framework needed.
+        Documentation: the README of the GitHub repository and the Javadoc jar (start with its overview).
+    </description>
+    <url>https://github.com/phisch84/domain-repository</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://github.com/phisch84/domain-repository/blob/master/LICENSE</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Philipp Schosteritsch</name>
+            <email>s.philipp@schoste.com</email>
+            <url>https://www.schoste.com/</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/phisch84/domain-repository.git</connection>
+        <developerConnection>scm:git:https://github.com/phisch84/domain-repository.git</developerConnection>
+        <url>https://github.com/phisch84/domain-repository</url>
+    </scm>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/phisch84/domain-repository/issues</url>
+    </issueManagement>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -14,13 +46,18 @@
         <maven.jar-plugin.version>3.5.0</maven.jar-plugin.version>
         <maven.surfeire.version>3.5.5</maven.surfeire.version>
         <maven.javadoc-plugin.version>3.11.2</maven.javadoc-plugin.version>
+        <versions-maven-plugin.version>2.25.1</versions-maven-plugin.version>
         <junit.version>4.13.2</junit.version>
         <!-- latest Spring version compatible with Java 8 (same as dao) -->
         <spring.version>5.3.39</spring.version>
-        <ddd.dao.version>4.0.0-SNAPSHOT</ddd.dao.version>
-        <ddd.dao-fs.version>4.0.0-SNAPSHOT</ddd.dao-fs.version>
+        <!-- all artifacts of a DAO 4 release have the same version -->
+        <dao4.version>4.1.0.RELEASE</dao4.version>
     </properties>
 
+    <!--
+    dao4 comes from the GitHub Packages registry of the dao repository. The id is the one of distributionManagement, so that
+    one server entry (with a token which may read the dao packages) serves both, also in the GitHub workflows.
+    -->
     <repositories>
         <repository>
             <id>github</id>
@@ -32,12 +69,12 @@
         <dependency>
             <groupId>com.schoste.ddd.infrastructure</groupId>
             <artifactId>dao4</artifactId>
-            <version>${ddd.dao.version}</version>
+            <version>${dao4.version}</version>
         </dependency>
         <dependency>
             <groupId>com.schoste.ddd.infrastructure</groupId>
             <artifactId>dao4-fs-serialization</artifactId>
-            <version>${ddd.dao-fs.version}</version>
+            <version>${dao4.version}</version>
             <!-- only the integration tests store data objects in files; consumers choose their own storage -->
             <scope>test</scope>
         </dependency>
@@ -45,7 +82,7 @@
         <dependency>
             <groupId>com.schoste.ddd.infrastructure</groupId>
             <artifactId>dao4</artifactId>
-            <version>${ddd.dao.version}</version>
+            <version>${dao4.version}</version>
             <classifier>tests</classifier>
             <type>test-jar</type>
             <scope>test</scope>
@@ -121,6 +158,15 @@
                         <reuseForks>false</reuseForks>
                         <forkCount>1</forkCount>
                     </configuration>
+                </plugin>
+
+                <!--
+                Changes the version: mvn versions:set -DnewVersion=X.Y.Z.RELEASE -DgenerateBackupPoms=false
+                -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>versions-maven-plugin</artifactId>
+                    <version>${versions-maven-plugin.version}</version>
                 </plugin>
             </plugins>
         </pluginManagement>

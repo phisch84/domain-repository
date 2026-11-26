@@ -4,34 +4,81 @@ A small library for the domain layer: **repositories** create, provide and track
 **Unit of Work** writes their changes to a storage. The storage is accessed through a DAO (Data Access Object) of the
 [DAO 4](https://github.com/phisch84/dao) library, which stores each entity as a **data object**.
 
-> **Status:** version 3.0.0 is under development and not released yet. This page describes the contract of 3.0.0.
+> **Status:** version 3.0.0 is under development and not released yet. This page describes the contract of 3.0.0;
+> what changed between the versions is in the [changelog](CHANGELOG.md).
 > The Javadoc of each type is the complete reference; this page is the entry point.
 
 ## Dependencies
 
 The artifact is published to GitHub Packages (`https://maven.pkg.github.com/phisch84/domain-repository`), together with a
-Javadoc jar (`javadoc` classifier). It needs `dao4` and one of its storages:
+Javadoc jar (`javadoc` classifier). It needs `dao4` (brought along) and one of its storages:
 
 ```xml
 <dependency>
     <groupId>com.schoste.ddd.domain</groupId>
     <artifactId>domain-repository3</artifactId>
-    <version>3.0.0</version>
+    <version>3.0.0.RELEASE</version>
 </dependency>
 
-<!-- a storage of the DAO 4 library, e.g. serialized files (or dao4-hibernate for a database) -->
+<!-- a storage of the DAO 4 library, e.g. serialized files, or a database via dao4-hibernate (Hibernate 5.6)
+     or dao4-hibernate-jakarta (Hibernate 6.6 and later) -->
 <dependency>
     <groupId>com.schoste.ddd.infrastructure</groupId>
     <artifactId>dao4-fs-serialization</artifactId>
-    <version>4.0.0</version>
+    <version>4.1.0.RELEASE</version>
 </dependency>
 ```
+
+Release versions end with `.RELEASE` (e.g. `3.0.0.RELEASE`); they never change. Development versions (`-SNAPSHOT`) aren't
+published. Version 3.0.0 is built and tested with `dao4` 4.1.0.
+
+### Getting the artifacts
+
+GitHub Packages needs a login also for public packages. This library and DAO 4 come from two registries, which one token
+can read:
+
+1. Create a GitHub personal access token (classic) with the scope `read:packages`.
+2. Add it to your Maven settings (`~/.m2/settings.xml`), once for each registry:
+
+   ```xml
+   <servers>
+       <server>
+           <id>github-domain-repository</id>
+           <username>YOUR_GITHUB_USER</username>
+           <password>YOUR_TOKEN</password>
+       </server>
+       <server>
+           <id>github-dao</id>
+           <username>YOUR_GITHUB_USER</username>
+           <password>YOUR_TOKEN</password>
+       </server>
+   </servers>
+   ```
+
+3. Add the registries to your project's `pom.xml`, with the same ids:
+
+   ```xml
+   <repositories>
+       <repository>
+           <id>github-domain-repository</id>
+           <url>https://maven.pkg.github.com/phisch84/domain-repository</url>
+       </repository>
+       <repository>
+           <id>github-dao</id>
+           <url>https://maven.pkg.github.com/phisch84/dao</url>
+       </repository>
+   </repositories>
+   ```
+
+The Javadoc jar is the reference documentation: IDEs show it when they download it (e.g. Eclipse and VS Code with
+"download Javadoc" enabled, or `mvn dependency:resolve -Dclassifier=javadoc`). Start with its overview.
 
 The major version is part of both the artifact id and the package name (`com.schoste.ddd.domain.v3`), so version 3 can be used
 side by side with the older versions (`domain-repository` 1.x and 2.x, which share the package `….domain.v1`) while a project
 migrates; see [Migrating from Domain Repository 1.x and 2.x](#migrating-from-domain-repository-1x-and-2x).
 
-The library is compiled for Java 8 and doesn't need Spring: every class can be created with `new`. Spring can still create and
+The library is compiled for Java 8, runs on any later Java version and doesn't need Spring: every class can be created with
+`new`, so it fits applications with any Spring version (or none). Spring can still create and
 inject repositories, entities and converters (override the methods listed under [Writing a repository](#writing-a-repository)).
 
 ## Terms
@@ -258,6 +305,9 @@ has its own migration section.
 | `DALException` (from DAO 2.x/3.x) | `DAOException` (from DAO 4); conversion failures in streams: `DataObjectConversionException` |
 
 ## Building
+
+Contributors (people and AI agents) start with [AGENTS.md](AGENTS.md): layout, conventions and how to test; the reasons
+behind the design are in [docs/decisions.md](docs/decisions.md).
 
 ```
 mvn clean verify
