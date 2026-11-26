@@ -3,7 +3,7 @@
 What changed between the versions of Domain Repository 3, for users of the artifact. Versions without a release date aren't
 released yet. Release versions end with `.RELEASE`.
 
-## 3.0.0 (not released yet)
+## 3.0.0 (2026-11-26)
 
 The first version of Domain Repository 3: a new artifact (`domain-repository3`) and package (`com.schoste.ddd.domain.v3`),
 which can be used side by side with `domain-repository` 1.x and 2.x. It is built on DAO 4 (`dao4`) instead of DAO 2.x/3.x.

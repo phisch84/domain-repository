@@ -4,7 +4,7 @@ A small library for the domain layer: **repositories** create, provide and track
 **Unit of Work** writes their changes to a storage. The storage is accessed through a DAO (Data Access Object) of the
 [DAO 4](https://github.com/phisch84/dao) library, which stores each entity as a **data object**.
 
-> **Status:** version 3.0.0 is under development and not released yet. This page describes the contract of 3.0.0;
+> **Status:** this page describes version 3.0.0 (`3.0.0.RELEASE`), the first release of Domain Repository 3;
 > what changed between the versions is in the [changelog](CHANGELOG.md).
 > The Javadoc of each type is the complete reference; this page is the entry point.
 
@@ -110,6 +110,22 @@ inject repositories, entities and converters (override the methods listed under 
   entities, so the next get loads them from the storage again.
 - **Null arguments** are rejected with `IllegalArgumentException`.
 
+## Common mistakes
+
+- **Changing an entity without `setModified`:** the change is only in memory; the next commit doesn't save it.
+- **Expecting a repository method to write:** `add`, `setModified` and `remove` only record; nothing is stored until a Unit of
+  Work commits.
+- **Keeping the id of a new entity before the commit:** it is virtual and replaced by the actual id on commit; read the id
+  after the commit.
+- **Comparing entities with `equals`, or by id in `equals`/`hashCode`:** use `isSameEntityAs`; an id-based `hashCode` breaks
+  the repository's collections when the id changes on commit.
+- **Not closing streams:** the DAO keeps its resources (e.g. a database session) open until the stream is closed.
+- **Setting the state of an entity yourself:** registers nothing; use the repository's methods.
+- **Using an entity after a rollback:** the repository has forgotten it (Detached); get it again for the stored state.
+- **Several Units of Work on one repository at the same time:** each of them records all changes of the repository; use one
+  Unit of Work per repository at a time.
+- **Expecting atomic commits without a transaction manager**, or with a storage which doesn't support transactions.
+
 ## Writing a repository
 
 The only method a repository has to implement is `getDataAccessObject()`. The entity's setters annotated with `@AutoSet` are
@@ -182,6 +198,43 @@ Everything else has a default which a repository may override:
 
 The DAO comes from `dao4`; the `CustomerDAO` used below is the serialization DAO from the package documentation of
 `com.schoste.ddd.infrastructure.dao.v4.serialization`.
+
+### Using Spring
+
+Repositories, Units of Work and transaction managers can be Spring beans like any other object. Override the two hooks only
+if entities, or the classes named by `@AutoSet(clazz = …)`, must be created by Spring:
+
+```java
+public class SpringCustomerRepository extends GenericRepositoryImpl<Long, Customer, CustomerDO>
+{
+    @Autowired private ApplicationContext context;
+    @Autowired private DAO<Long, CustomerDO> dao;
+    private AutoObjectConverter converter;
+
+    @Override
+    protected DAO<Long, CustomerDO> getDataAccessObject() { return this.dao; }
+
+    // only if entities are Spring beans (e.g. prototype beans with injected services)
+    @Override
+    protected Customer doCreateEntity(Class<Customer> entityClass, Object... args)
+    {
+        return this.context.getBean(entityClass, args);
+    }
+
+    // only if classes named by @AutoSet(clazz = ...) are Spring beans
+    @Override
+    protected synchronized AutoObjectConverter getAutoObjectConverter()
+    {
+        if (this.converter == null) this.converter = new AutoObjectConverterImpl()
+        {
+            @Override
+            protected Object getInstance(Class<?> clazz) { return context.getBean(clazz); }
+        };
+
+        return this.converter;
+    }
+}
+```
 
 ## Using a repository
 

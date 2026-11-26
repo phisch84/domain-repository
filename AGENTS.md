@@ -14,6 +14,9 @@ the **POM** (name, description) and, at most, the README on GitHub. Therefore:
   jar (except missing comments).
 - A change of behavior updates, in the same step: the Javadoc where users read the rule, the README if it mentions it,
   `CHANGELOG.md` (under the version in development), and `docs/decisions.md` if a decision changes.
+- `overview.html` is the page users (and their AI agents) read first: it keeps the requirements, a complete example with
+  imports, transactions, Spring and the common mistakes. Its examples and the README's are copied as they are, so compile
+  them against the built jars (e.g. with `javac`) whenever they change; doclint doesn't check code in `<pre>` blocks.
 
 ## Layout
 

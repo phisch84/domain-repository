@@ -6,12 +6,26 @@
 write their changes to a storage. The storage is accessed through a DAO (Data Access Object) of the {@code dao4} library,
 which stores each entity as a data object.</p>
 
+<h1>Requirements</h1>
+<ul>
+<li>Java 8 or later. No framework is needed; with Spring (any version), see <a href="#spring">Using Spring</a>.</li>
+<li>{@code dao4} (group {@code com.schoste.ddd.infrastructure}), which this artifact brings along, and one of its storages:
+{@code dao4-fs-serialization} (files), {@code dao4-hibernate} (Hibernate 5.6) or {@code dao4-hibernate-jakarta}
+(Hibernate 6.6 and later). Version 3.0.0 is built and tested with {@code dao4} 4.1.0.</li>
+<li>The artifacts are published to GitHub Packages; how to get them, the changelog and the migration from
+{@code domain-repository} 1.x/2.x (package {@code com.schoste.ddd.domain.v1}): see the README of
+<a href="https://github.com/phisch84/domain-repository">github.com/phisch84/domain-repository</a>.</li>
+<li>The test jar of this artifact contains the library's own tests; it isn't meant to be used by applications.</li>
+</ul>
+
 <h1>Where to start</h1>
 <ul>
 <li><b>Using a repository:</b> {@link com.schoste.ddd.domain.v3.services.GenericRepository}. Its class documentation
 lists the rules which hold for every repository: the cache of entity instances, pending removals, refreshing, and exceptions.</li>
 <li><b>Committing changes:</b> {@link com.schoste.ddd.domain.v3.services.UnitOfWork} and its implementation
 {@link com.schoste.ddd.domain.v3.services.standard.UnitOfWorkImpl}.</li>
+<li><b>Atomic commits:</b> {@link com.schoste.ddd.domain.v3.services.DomainTransactionManager} and its implementation
+{@link com.schoste.ddd.domain.v3.services.standard.DomainTransactionManagerImpl}.</li>
 <li><b>Writing entities:</b> {@link com.schoste.ddd.domain.v3.entities.BasicEntity}, the states in
 {@link com.schoste.ddd.domain.v3.entities.Entity.State}, and {@link com.schoste.ddd.domain.v3.annotations.AutoSet}
 for the properties which the repository sets from data objects.</li>
@@ -22,21 +36,28 @@ only provides its DAO; everything else has a default which can be overridden (e.
 
 <h1>Rules in brief</h1>
 <ul>
-<li>Repositories never write to the storage; a Unit of Work writes the recorded changes on commit. A commit isn't a transaction.</li>
-<li>The state of an entity tells what happens on commit: Detached, Added, Unchanged, Modified, Deleted.</li>
+<li>Repositories never write to the storage; a Unit of Work writes the recorded changes on commit. A commit is atomic only
+with a transaction manager.</li>
+<li>The state of an entity tells what happens on commit: Detached, Added, Unchanged, Modified, Deleted. Only the repository
+sets it: tell it about changes with {@code add}, {@code setModified} and {@code remove}.</li>
 <li>As long as an entity is referenced, the repository provides the same instance; the cache takes precedence over the storage.</li>
 <li>Entities are only equal to themselves; compare them by id with
 {@link com.schoste.ddd.domain.v3.entities.Entity#isSameEntityAs(com.schoste.ddd.domain.v3.entities.Entity)}.</li>
 <li>An entity whose data object is flagged deleted or missing isn't provided.</li>
 <li>Streams returned by repositories are lazy and must be closed.</li>
-<li>Closing a Unit of Work rolls back what hasn't been committed.</li>
+<li>Closing a Unit of Work rolls back what hasn't been committed; a rollback makes the repositories forget the changed
+entities (they become Detached; getting them again loads new instances from the storage).</li>
 <li>Null arguments are rejected with {@link java.lang.IllegalArgumentException}.</li>
 </ul>
 
 <h1>Example</h1>
 <p>A repository for the entity {@code Customer}, whose data object {@code CustomerDO} is stored by a DAO of the {@code dao4}
-library, and its use. Spring isn't needed; all objects are created with {@code new}.</p>
+library, and its use. Spring isn't needed; all objects are created with {@code new}. Note the two {@code AutoSet} annotations:
+the one of this library on the entity, the one of {@code dao4} on the data object.</p>
 <pre>
+import com.schoste.ddd.domain.v3.annotations.AutoSet;
+import com.schoste.ddd.domain.v3.entities.BasicEntity;
+
 public class Customer extends BasicEntity&lt;Long&gt;
 {
     private String name;
@@ -47,15 +68,35 @@ public class Customer extends BasicEntity&lt;Long&gt;
     public void setName(String name) { this.name = name; }
 }
 
+import com.schoste.ddd.infrastructure.dao.v4.annotations.AutoSet;
+import com.schoste.ddd.infrastructure.dao.v4.models.DataObject;
+
+public class CustomerDO extends DataObject&lt;Long&gt;
+{
+    private static final long serialVersionUID = 1L;
+
+    private String name;
+
+    public String getName() { return this.name; }
+
+    &#64;AutoSet   // set from Customer.getName()
+    public void setName(String name) { this.name = name; }
+}
+
+import com.schoste.ddd.domain.v3.services.standard.GenericRepositoryImpl;
+import com.schoste.ddd.infrastructure.dao.v4.services.DAO;
+
 public class CustomerRepository extends GenericRepositoryImpl&lt;Long, Customer, CustomerDO&gt;
 {
     private final DAO&lt;Long, CustomerDO&gt; dao;
 
     public CustomerRepository(DAO&lt;Long, CustomerDO&gt; dao) { this.dao = dao; }
 
+    &#64;Override
     protected DAO&lt;Long, CustomerDO&gt; getDataAccessObject() { return this.dao; }
 }
 
+// the DAO comes from a storage artifact of dao4 (see the package documentation of its storages)
 CustomerRepository customers = new CustomerRepository(customerDAO);
 
 try (UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(customers))
@@ -65,12 +106,90 @@ try (UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(customers))
 
     customers.add(customer);                         // Added
     unitOfWork.commit();                             // saved: actual id, Unchanged
+
+    customer.setName("Example Inc.");
+    customers.setModified(customer);                 // without it, the change isn't saved
+    unitOfWork.commit();
 }
 
-try (Stream&lt;Customer&gt; all = customers.getAll(false))
+try (Stream&lt;Customer&gt; all = customers.getAll(false))   // streams must be closed
 {
     all.forEach(c -&gt; System.out.println(c.getName()));
 }
 </pre>
+
+<h1>Transactions</h1>
+<p>Without a transaction manager, a commit which fails part-way leaves the changes written so far written. With one, a commit
+stores all of its changes or none, and several commits can form one transaction (e.g. when a child needs the actual id of its
+parent). The storage must support transactions: the Hibernate DAOs of {@code dao4} do, the file DAOs don't.</p>
+<pre>
+DomainTransactionManager transactions = new DomainTransactionManagerImpl(new HibernateDAOTransactionManager(sessionFactory));
+
+try (UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(Arrays.asList(customers, orders), transactions);
+     DomainTransaction transaction = transactions.begin())
+{
+    customers.add(customer);
+    unitOfWork.commit();          // customer gets its actual id; joins the transaction
+
+    order.setCustomerId(customer.getId());
+    orders.add(order);
+    unitOfWork.commit();
+
+    transaction.commit();         // stores both commits; without it, closing rolls both back
+}
+</pre>
+
+<h1 id="spring">Using Spring</h1>
+<p>Repositories, Units of Work and transaction managers can be Spring beans like any other object. Override the two hooks of
+{@link com.schoste.ddd.domain.v3.services.standard.GenericRepositoryImpl} only if entities, or the classes named by
+{@code @AutoSet(clazz = ...)}, must be created by Spring:</p>
+<pre>
+public class SpringCustomerRepository extends GenericRepositoryImpl&lt;Long, Customer, CustomerDO&gt;
+{
+    &#64;Autowired private ApplicationContext context;
+    &#64;Autowired private DAO&lt;Long, CustomerDO&gt; dao;
+    private AutoObjectConverter converter;
+
+    &#64;Override
+    protected DAO&lt;Long, CustomerDO&gt; getDataAccessObject() { return this.dao; }
+
+    // only if entities are Spring beans (e.g. prototype beans with injected services)
+    &#64;Override
+    protected Customer doCreateEntity(Class&lt;Customer&gt; entityClass, Object... args)
+    {
+        return this.context.getBean(entityClass, args);
+    }
+
+    // only if classes named by &#64;AutoSet(clazz = ...) are Spring beans
+    &#64;Override
+    protected synchronized AutoObjectConverter getAutoObjectConverter()
+    {
+        if (this.converter == null) this.converter = new AutoObjectConverterImpl()
+        {
+            &#64;Override
+            protected Object getInstance(Class&lt;?&gt; clazz) { return context.getBean(clazz); }
+        };
+
+        return this.converter;
+    }
+}
+</pre>
+
+<h1>Common mistakes</h1>
+<ul>
+<li><b>Changing an entity without {@code setModified}:</b> the change is only in memory; the next commit doesn't save it.</li>
+<li><b>Expecting a repository method to write:</b> {@code add}, {@code setModified} and {@code remove} only record; nothing
+is stored until a Unit of Work commits.</li>
+<li><b>Keeping the id of a new entity before the commit:</b> it is virtual and replaced by the actual id on commit; read the
+id after the commit.</li>
+<li><b>Comparing entities with {@code equals} or by id in {@code equals}/{@code hashCode}:</b> use {@code isSameEntityAs};
+an id-based {@code hashCode} breaks the repository's collections when the id changes on commit.</li>
+<li><b>Not closing streams:</b> the DAO keeps its resources (e.g. a database session) open until the stream is closed.</li>
+<li><b>Setting the state of an entity yourself:</b> registers nothing; use the repository's methods.</li>
+<li><b>Using an entity after a rollback:</b> the repository has forgotten it (Detached); get it again for the stored state.</li>
+<li><b>Several Units of Work on one repository at the same time:</b> each of them records all changes of the repository; use
+one Unit of Work per repository at a time.</li>
+<li><b>Expecting atomic commits without a transaction manager</b>, or with a storage which doesn't support transactions.</li>
+</ul>
 </body>
 </html>
