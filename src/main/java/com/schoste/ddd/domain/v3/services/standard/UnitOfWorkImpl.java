@@ -15,6 +15,8 @@ import java.util.Set;
 import com.schoste.ddd.domain.v3.entities.Entity;
 import com.schoste.ddd.domain.v3.entities.Entity.State;
 import com.schoste.ddd.domain.v3.exceptions.DomainException;
+import com.schoste.ddd.domain.v3.services.DomainTransaction;
+import com.schoste.ddd.domain.v3.services.DomainTransactionManager;
 import com.schoste.ddd.domain.v3.services.GenericRepository;
 import com.schoste.ddd.domain.v3.services.UnitOfWork;
 import com.schoste.ddd.domain.v3.services.UnitOfWorkListener;
@@ -46,6 +48,7 @@ public class UnitOfWorkImpl implements UnitOfWork
 {
 	private Map<GenericRepositoryImpl<?,?,?>, RepositoryChangeLog> changeLogs;
 	private Set<UnitOfWorkListener> listners = new HashSet<UnitOfWorkListener>();
+	private DomainTransactionManager transactionManager = null;
 
 	private void notifyListenersAfterDelete(Collection<Object> objs)
 	{
@@ -87,6 +90,8 @@ public class UnitOfWorkImpl implements UnitOfWork
 			{
 				if (objToRemove instanceof Entity) ((Entity<?>) objToRemove).setState(State.Detached);
 			}
+
+			DomainTransactionManagerImpl.registerWritten(repository, objectsToRemove);
 
 			this.notifyListenersAfterDelete(objectsToRemove);
 
@@ -133,6 +138,8 @@ public class UnitOfWorkImpl implements UnitOfWork
 			// update the domain object in case the data object changed
 			for (DO dataObject : dataObjects) repository.dataObjectToEntity(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
 
+			DomainTransactionManagerImpl.registerWritten(repository, objectsToPersist);
+
 			this.notifyListenersAfterPersistNew(objectsToPersist);
 
 			objectsToPersist.clear();
@@ -178,6 +185,8 @@ public class UnitOfWorkImpl implements UnitOfWork
 			// update the domain object in case the data object changed
 			for (DO dataObject : dataObjects) repository.dataObjectToEntity(dataObject, dataObjectsToObjectsToPersist.get(System.identityHashCode(dataObject)));
 
+			DomainTransactionManagerImpl.registerWritten(repository, objectsToPersist);
+
 			this.notifyListenersAfterPersistExisting(objectsToPersist);
 
 			objectsToPersist.clear();
@@ -216,29 +225,109 @@ public class UnitOfWorkImpl implements UnitOfWork
 			repository.addChangeListener(this);
 		}
 	}
-	
+
+	/**
+	 * Creates a new Unit of Work for several repositories, which commits in transactions of a transaction manager
+	 * (see {@link #setTransactionManager(DomainTransactionManager)}), and registers it as their change listener.
+	 *
+	 * @param repositories the repositories whose changes the Unit of Work records, in the order in which they are committed and rolled back
+	 * @param transactionManager the transaction manager to commit with, or null to commit without an own transaction
+	 * @throws IllegalArgumentException thrown if repositories is null or contains null
+	 */
+	public UnitOfWorkImpl(List<GenericRepositoryImpl<?,?,?>> repositories, DomainTransactionManager transactionManager) throws IllegalArgumentException
+	{
+		this(repositories);
+
+		this.transactionManager = transactionManager;
+	}
+
+	/**
+	 * Sets the transaction manager the Unit of Work commits with. With a transaction manager, each {@link #commit()} runs in a
+	 * transaction of it (an inner one if the thread has a transaction already), so it stores all its changes or none: if it fails,
+	 * nothing is stored, and it acts like {@link #rollback()} for all its changes, also the ones it had written already.
+	 * Without a transaction manager, a commit isn't atomic (see {@link UnitOfWork#commit()}), unless the thread has a
+	 * transaction (see {@link DomainTransactionManager}), which it joins.
+	 *
+	 * @param transactionManager the transaction manager to commit with, or null to commit without an own transaction
+	 */
+	public void setTransactionManager(DomainTransactionManager transactionManager)
+	{
+		this.transactionManager = transactionManager;
+	}
+
 	/**
 	 * {@inheritDoc}
+	 *
+	 * The commit is atomic if the Unit of Work has a transaction manager ({@link #setTransactionManager(DomainTransactionManager)}).
+	 * The changes of a commit join the transaction which the thread has (see {@link DomainTransactionManager}); if the commit fails,
+	 * that transaction is marked for rollback.
 	 */
-	public void commit() throws DAOException, DomainException 
+	public void commit() throws DAOException, DomainException
 	{
+		DomainTransaction transaction = null;
+
 		try
 		{
-			//TODO: encapsulate in transaction
+			if (this.transactionManager != null) transaction = this.transactionManager.begin();
+
 			for (GenericRepositoryImpl<?,?,?> repository : this.changeLogs.keySet())
-			{					
+			{
 				this.deleteEntities(repository);
 				this.persistNewEntities(repository);
 				this.persistExistingEntities(repository);
 			}
+
+			if (transaction != null) transaction.commit();
 		}
 		catch (DAOException e)
 		{
+			this.abortCommit(transaction, e);
+
 			throw e;
 		}
 		catch (Exception e)
 		{
-			throw new DomainException(e);
+			DomainException failure = (e instanceof DomainException) ? (DomainException) e : new DomainException(e);
+
+			this.abortCommit(transaction, failure);
+
+			throw failure;
+		}
+	}
+
+	/**
+	 * Cleans up after a failed commit. Without an own transaction, the transaction which the thread has (if any) is marked for
+	 * rollback, and the changes which haven't been written stay recorded. With an own transaction, it is rolled back, which lets the
+	 * repositories forget the entities written by the commit, and the changes which haven't been written are rolled back as well.
+	 *
+	 * @param transaction the own transaction of the commit, or null
+	 * @param failure the failure of the commit, to which further failures are added as suppressed exceptions
+	 */
+	private void abortCommit(DomainTransaction transaction, Exception failure)
+	{
+		if (transaction == null)
+		{
+			DomainTransactionManagerImpl.markForRollback();
+
+			return;
+		}
+
+		try
+		{
+			transaction.close();
+		}
+		catch (Exception e)
+		{
+			failure.addSuppressed(e);
+		}
+
+		try
+		{
+			this.rollback();
+		}
+		catch (Exception e)
+		{
+			failure.addSuppressed(e);
 		}
 	}
 
